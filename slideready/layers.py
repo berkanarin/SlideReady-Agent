@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 G = re.compile(r"<g\b[^>]*?(/?)>|</g>")
+REF = re.compile(r'href="#([^"]+)"|url\(#([^)]+)\)')
 
 
 def soffice_bin():
@@ -52,12 +53,30 @@ def _balanced(svg, start):
     raise ValueError("SVG grubu kapanmıyor")
 
 
+def _element(svg, start):
+    """svg[start] '<' ile başlayan öğenin bitişi (kendi kendini kapatan, <g> ya da aynı adlı iç içe öğe)."""
+    tag = re.match(r"<([\w:.-]+)", svg[start:])[1]
+    if tag == "g":
+        return _balanced(svg, start)
+    pat = re.compile(r"<%s\b[^>]*?(/?)>|</%s>" % (re.escape(tag), re.escape(tag)))
+    depth = 0
+    for m in pat.finditer(svg, start):
+        if m[0].startswith("</"):
+            depth -= 1
+        elif not m[1]:
+            depth += 1
+        if depth == 0:
+            return m.end()
+    raise ValueError(f"SVG öğesi kapanmıyor: {tag}")
+
+
 class SvgDeck:
     def __init__(self, path):
         self.svg = Path(path).read_text(encoding="utf-8")
         head_end = self.svg.index('<g class="DummySlide">')
         head = re.sub(r"<script.*?</script>", "", self.svg[:head_end], flags=re.S)
         self.defs = head[head.index("<svg"):].replace("</svg>", "")
+        self.ids = {m[1]: m.start() for m in re.finditer(r'\sid="([^"]+)"', self.svg)}
         self.viewbox = [float(v) for v in re.search(r'viewBox="([^"]+)"', self.svg)[1].split()]
         self.meta = {int(m[1]): dict(slide=m[2], master=m[3], bo=m[4] != "hidden") for m in re.finditer(
             r'id="ooo:meta_slide_(\d+)" ooo:slide="(id\d+)" ooo:master="(id\d+)"[^>]*?'
@@ -82,7 +101,30 @@ class SvgDeck:
         groups = [dict(id=m[1], x=float(m[2]), y=float(m[3]), w=float(m[4]), h=float(m[5])) for m in re.finditer(
             r'<g id="((?:id|sr)\d+)">\s*<rect class="BoundingBox" stroke="none" fill="none" '
             r'x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)"', body)]
+        masters = [self.svg[self.ids[u]:_balanced(self.svg, self.svg.rindex("<", 0, self.ids[u]))]
+                   for u in uses if u in self.ids]
+        shared = self.shared(body + "".join(masters))
+        if shared:
+            body += '\n<defs class="SlideReadyShared">%s</defs>' % shared
         return dict(body=body, uses=uses, groups=groups)
+
+    def shared(self, text):
+        """Sahnede kullanılıp sahnenin dışında tanımlı öğeler (yeni LibreOffice sürümleri tekrar eden görselleri bir
+        kez yazar, sonrakileri <use> ile çağırır; tanım başka bir slaytta ya da belgenin sonunda kalabilir)."""
+        have = set(re.findall(r'\sid="([^"]+)"', self.defs + text))
+        out, todo = [], [text]
+        while todo:
+            for m in REF.finditer(todo.pop()):
+                ref = m[1] or m[2]
+                if ref in have or ref not in self.ids:
+                    continue
+                start = self.svg.rindex("<", 0, self.ids[ref])
+                el = self.svg[start:_element(self.svg, start)]
+                el = re.sub(r'\svisibility="hidden"', "", el, count=1)
+                have.update(re.findall(r'\sid="([^"]+)"', el))
+                out.append(el)
+                todo.append(el)
+        return "\n".join(out)
 
 
 def match(shapes, groups, tol=600):

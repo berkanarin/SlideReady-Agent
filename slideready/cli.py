@@ -7,6 +7,7 @@
 """
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -16,8 +17,9 @@ from pathlib import Path
 from . import __version__
 from .deck import inventory
 from .doctor import main as doctor_main, node_env
-from .embed import embed
+from .embed import duration, embed
 from .layers import SvgDeck, convert, match
+from .media import collect as collect_media, strip_video
 from .scene import build, default_plan, score
 
 HERE = Path(__file__).resolve().parent
@@ -49,7 +51,17 @@ def missing_fonts(names):
 def analyze(deck, work, quiet=False):
     """PPTX + LibreOffice SVG -> analysis.json ve (kullanıcının düzenleyebileceği) plan.json"""
     inv = inventory(deck)
-    svg = SvgDeck(convert(deck, work / "svg"))
+    src = deck
+    stripped = work / "src" / deck.name                # videolar LibreOffice için poster görseline çevrilir
+    stripped.parent.mkdir(exist_ok=True)
+    if strip_video(deck, stripped):
+        src = stripped
+        st = deck.stat()
+        os.utime(stripped, (st.st_atime, st.st_mtime))   # SVG önbelleği orijinalin tarihine göre çalışsın
+    elif stripped.exists():
+        stripped.unlink()
+    svg = SvgDeck(convert(src, work / "svg"))
+    media = collect_media(deck, work)
     plan_path = work / "plan.json"
     old = {}
     if plan_path.exists():
@@ -66,11 +78,14 @@ def analyze(deck, work, quiet=False):
         s["unmatched_svg"] = len(free)
         s["score"] = round(score(s), 1)
         s["placeholder"] = any(PLACEHOLDER.search(d.get("text", "")) for d in s["shapes"])
+        s["media"] = media.get(s["no"], [])
         plan = {**default_plan(s), **old.get(s["no"], {})}
         plans.append(plan)
         rows.append(dict(no=s["no"], shapes=len(kinds), charts=kinds.count("chart"), tables=kinds.count("table"),
                          numbers=kinds.count("number"), score=s["score"], hidden=s["hidden"],
-                         unmatched=len(s["unmatched"]), placeholder=s["placeholder"], animate=plan["animate"]))
+                         unmatched=len(s["unmatched"]), placeholder=s["placeholder"], animate=plan["animate"],
+                         media=", ".join(sorted({m["type"] for m in s["media"]})),
+                         regions=sum(len(d["regions"]["blocks"]) for d in s["shapes"] if "regions" in d)))
     inv["missing_fonts"] = missing_fonts(inv["fonts"])
     (work / "analysis.json").write_text(json.dumps(inv, ensure_ascii=False, indent=1), encoding="utf-8")
     plan_path.write_text(json.dumps(dict(deck=str(deck), slides=plans), ensure_ascii=False, indent=1), encoding="utf-8")
@@ -79,7 +94,9 @@ def analyze(deck, work, quiet=False):
         print(f"{'no':>3} {'şekil':>5} {'grafik':>6} {'tablo':>5} {'sayı':>4} {'puan':>5}  not")
         for r in rows:
             notes = [n for n, c in (("gizli", r["hidden"]), ("yer tutucu metin", r["placeholder"]),
-                                    (f"{r['unmatched']} şekil eşlenmedi", r["unmatched"]), ("sabit kalacak", not r["animate"])) if c]
+                                    (f"{r['unmatched']} şekil eşlenmedi", r["unmatched"]), ("sabit kalacak", not r["animate"]),
+                                    (f"hareketli medya: {r['media']}", r["media"]),
+                                    (f"resim içinde {r['regions']} blok", r["regions"])) if c]
             print(f"{r['no']:>3} {r['shapes']:>5} {r['charts']:>6} {r['tables']:>5} {r['numbers']:>4} {r['score']:>5}  {', '.join(notes)}")
         print("fontlar: " + ", ".join(inv["fonts"]))
         if inv["missing_fonts"]:
@@ -134,6 +151,24 @@ def sheet(scene_dir, out):
                     "xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0", str(out)], check=True)
 
 
+def inv_media(work, no):
+    inv = json.loads((work / "analysis.json").read_text(encoding="utf-8"))
+    plan = {p["no"]: p for p in json.loads((work / "plan.json").read_text(encoding="utf-8"))["slides"]}
+    return inv["slides"][no - 1]["media"] if plan[no].get("media", True) else []
+
+
+def add_audio(clip, media):
+    """Slayttaki ilk sesli videonun sesini klibe ekler (orijinal video artık klibin altında kalıyor)."""
+    src = next((m for m in media if m["type"] == "video" and m.get("audio")), None)
+    if not src:
+        return
+    tmp = clip.with_name(clip.stem + "-a.mp4")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(clip), "-i", src["file"], "-map", "0:v", "-map",
+                    "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-t", str(duration(clip)), "-movflags", "+faststart", str(tmp)],
+                   check=True)
+    tmp.replace(clip)
+
+
 def cmd_preview(a):
     deck = Path(a.deck).resolve()
     work = workdir(deck, a.work)
@@ -163,6 +198,8 @@ def cmd_export(a):
     jobs = [dict(dir=str(work / "scenes" / f"{no:03d}"), out=str(cdir / f"{no:03d}.mp4"), **q) for no, _, _ in built]
     print(f"\n{len(jobs)} slayt render ediliyor ({q['width']}x{q['height']}, {q['fps']} fps)…")
     render(jobs, work)
+    for no, _, _ in built:
+        add_audio(cdir / f"{no:03d}.mp4", inv_media(work, no))
     dst = Path(a.output).resolve() if a.output else deck.with_name(deck.stem + "-SlideReady.pptx")
     done = embed(deck, {no: cdir / f"{no:03d}.mp4" for no, _, _ in built}, dst)
     size = dst.stat().st_size / 1e6
