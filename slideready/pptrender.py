@@ -21,7 +21,7 @@ from pathlib import Path
 
 FRAMES = 16          # sayaç kare sayısı (son kare şeklin kendisi)
 ALPHA_MIN = 1 / 255  # bu kadar saydam pikseller kırpmada yok sayılır
-VERSION = 2         # katman biçimi değişirse önbelleği geçersiz kılar
+VERSION = 4         # katman biçimi değişirse önbelleği geçersiz kılar
 
 
 def available(close=False):
@@ -184,13 +184,14 @@ def _export_slide(slide, d, shapes, bgmedia, W, H):
     """Ham kareleri d/raw altına yazar; bulunamayan şekil kimliklerini döndürür.
 
     bgmedia: düzen/asıl slayttaki hareketli medya [(katman, kimlik)]; varsa onlarsız bir arka plan (bgm.png) da yazılır,
-    sahne medyanın karelerini bunun üstüne koyar (aksi hâlde ilk kare animasyonun altında görünürdü)."""
+    sahne medyanın karelerini bunun üstüne koyar (aksi hâlde ilk kare animasyonun altında görünürdü).
+    Sayı şekillerinde her rakam konumu için 0-9 çeşitleri de çizilir (gerçek sayaç/odometre sütunları)."""
     raw = d / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     ex = lambda name: slide.Export(str(raw / name), "PNG", W, H)  # noqa: E731
     leaves = _leaves(slide)
     ex("full.png")
-    items, missing, texts = [], [], {}
+    items, missing, texts, digits = [], [], {}, {}
     for s in shapes:
         sh = leaves.get(s["sid"])
         if sh is None:
@@ -232,9 +233,52 @@ def _export_slide(slide, d, shapes, bgmedia, W, H):
                 hit = tr.Find(cur)
                 if hit is not None:
                     hit.Text = s["val"]
+            if s["kind"] == "number":
+                cols = _digit_variants(sh, s["sid"], tag, ex)
+                if tag == "w":
+                    digits[str(s["sid"])] = cols
             sh.Visible = 0
-    return missing, texts
+    return missing, texts, digits
 
+
+def _digit_variants(sh, sid, tag, ex):
+    """Sayının her rakam konumu için 0-9 çeşidini dışa aktarır (yalnızca o karakter değişir, kalanı aynı kalır).
+    Döner: [dict(p, d, bounds=[sol, üst, sağ, alt], var=[[sol, sağ] x10])] (svg birimi)."""
+    tr = sh.TextFrame.TextRange
+    text, cols = tr.Text, []
+    for p, ch in enumerate(text):
+        if not ch.isdigit():
+            continue
+        r = tr.Characters(p + 1, 1)
+        col = dict(p=p, d=int(ch), bounds=[round(v * PT, 1) for v in (r.BoundLeft, r.BoundTop, r.BoundLeft + r.BoundWidth,
+                                                                       r.BoundTop + r.BoundHeight)], var=[])
+        for dg in "0123456789":
+            tr.Characters(p + 1, 1).Text = dg
+            r = tr.Characters(p + 1, 1)
+            col["var"].append([round(r.BoundLeft * PT, 1), round((r.BoundLeft + r.BoundWidth) * PT, 1)])
+            ex(f"{sid}-d{p}_{dg}-{tag}.png")
+        tr.Characters(p + 1, 1).Text = ch
+        cols.append(col)
+    return cols
+
+
+def _odometer(raw, d, sid, cols, box, k, pair):
+    """Rakam çeşitlerini matlayıp sütun görüntülerine kırpar. Sütun yüksekliği sayı katmanının kutusudur."""
+    y0, y1 = box[1], box[3]
+    out = []
+    for col in cols:
+        imgs = []
+        for dg in range(10):
+            name = f"{sid}-d{col['p']}_{dg}"
+            if not (raw / f"{name}-w.png").exists():
+                return None
+            im, _ = matte(*pair(name))
+            l, r = col["var"][dg]
+            rect = (max(0, int(l / k)), y0, max(int(l / k) + 1, round(r / k)), y1)
+            imgs.append(dict(file=f"{name}.png", box=_crop_save(im, rect, d / f"{name}.png")))
+        b = col["bounds"]
+        out.append(dict(d=col["d"], x0=b[0], x1=b[2], imgs=imgs))
+    return dict(cols=out) if out else None
 
 def _stamp(deck, width, shapes, bgmedia):
     st = Path(deck).stat()
@@ -278,11 +322,16 @@ def render(deck, inv, work, nos, width=1920, log=print):
     if todo:
         with _PowerPoint() as pp:
             pres = pp.open(deck)
+            # önceki slaytların son kareleri (süreklilik geçişi) hiçbir slayt değiştirilmeden önce alınır
+            for no, _, _, d, _ in todo:
+                if no > 1:
+                    (d / "raw").mkdir(parents=True, exist_ok=True)
+                    pres.Slides(no - 1).Export(str(d / "raw" / "prev.png"), "PNG", W, H)
             for no, shapes, bgmedia, d, stamp in todo:
                 t0 = time.time()
                 for old in d.glob("*.png"):
-                    old.unlink()
-                missing, texts = _export_slide(pres.Slides(no), d, shapes, bgmedia, W, H)
+                    old.unlink()       # raw/prev.png alt klasörde: korunur
+                missing, texts, digits = _export_slide(pres.Slides(no), d, shapes, bgmedia, W, H)
                 t1 = time.time()
                 raw = d / "raw"
                 layers = {}
@@ -308,8 +357,10 @@ def render(deck, inv, work, nos, width=1920, log=print):
                                                         box=_crop_save(fim, fbox, d / f"{s['sid']}-n{i}.png")))
                     if texts.get(str(s["sid"])):
                         L["text"] = texts[str(s["sid"])]
+                    if digits.get(str(s["sid"])):
+                        L["odo"] = _odometer(raw, d, s["sid"], digits[str(s["sid"])], L["box"], k, pair)
                     layers[str(s["sid"])] = L
-                for name in ("full.png", "bg.png", "bgm.png"):
+                for name in ("full.png", "bg.png", "bgm.png", "prev.png"):
                     if (raw / name).exists():
                         (raw / name).replace(d / name)
                 for f in raw.glob("*.png"):
@@ -380,5 +431,14 @@ class PptDeck:
                 g["box"] = [x0 * self.k, y0 * self.k, x1 * self.k, y1 * self.k]
                 if L.get("text"):
                     g["text"] = L["text"]
+                g["file"] = str(d / L["file"])
+                if L.get("odo"):
+                    k = self.k
+                    g["odo"] = dict(cols=[dict(d=c["d"], x0=c["x0"], x1=c["x1"], imgs=[
+                        dict(href=(d / im["file"]).as_uri(), x=im["box"][0] * k, y=im["box"][1] * k,
+                             w=(im["box"][2] - im["box"][0]) * k, h=(im["box"][3] - im["box"][1]) * k)
+                        for im in c["imgs"]]) for c in L["odo"]["cols"]])
             groups.append(g)
-        return dict(body="\n".join(out), uses=["srbg"], groups=groups)
+        prev = d / "prev.png"
+        return dict(body="\n".join(out), uses=["srbg"], groups=groups, bg=str(bg), full=str(d / "full.png"),
+                    opening=str(d / "bg.png"), prev=str(prev) if prev.exists() else None)

@@ -17,11 +17,7 @@ svg g[data-a="line"]{transform-origin:left top}
 const SCENE=/*SCENE*/, MEDIA=/*MEDIA*/, STYLE=/*STYLE*/, DUR=/*DUR*/;
 const K=/*VBW*/ / 1920;                   // 1920 genişlikte 1 piksel = K svg birimi
 const svg=document.querySelector('body>svg'), NS='http://www.w3.org/2000/svg';
-// Katmanlar PowerPoint'in çizdiği PNG'lerdir: ilk kareden önce hepsi yüklenmiş olmalı (render.cjs bunu bekler)
-window.SR_READY=Promise.all([...svg.querySelectorAll('image')].map(im=>{
-  const u=im.getAttribute('href'); if(!u) return null;
-  const i=new Image(); i.src=u; return i.decode().catch(()=>null);
-}));
+
 
 const clamp=x=>Math.max(0,Math.min(1,x));
 const out3=x=>1-Math.pow(1-clamp(x),3);
@@ -40,11 +36,11 @@ function wedge(cx,cy,r,a){                 // saat 12'den saat yönünde dilim
 }
 
 // --- Odak çekme: her öğenin kendi Gauss bulanıklığı (SVG filtresi; 0'da filtre tamamen kalkar) ---
-function blurrer(node){
+function blurrer(node,vertical=false){
   const f=el('filter',{id:'srf'+(uid++),x:'-30%',y:'-30%',width:'160%',height:'160%',
     'color-interpolation-filters':'sRGB'}), b=el('feGaussianBlur',{stdDeviation:0});
   f.appendChild(b); defs().appendChild(f);
-  return px=>{ if(px>0.05*K){ b.setAttribute('stdDeviation',px); node.setAttribute('filter',`url(#${f.id})`); }
+  return px=>{ if(px>0.05*K){ b.setAttribute('stdDeviation',vertical?`0 ${px}`:px); node.setAttribute('filter',`url(#${f.id})`); }
                else node.removeAttribute('filter'); };
 }
 
@@ -63,18 +59,20 @@ const cams=[...svg.querySelectorAll('g[data-k]')].map(g=>{
   w.style.transformBox='view-box'; w.style.transformOrigin='0 0';
   return {w, d:STYLE.parallax?(DEPTH[g.dataset.k]||1):1};
 });
-const BGD=STYLE.parallax?0.3:1;
+const BGD=STYLE.cont?0:(STYLE.parallax?0.3:1);      // süreklilikte arka plan sabit: ortak öğeler kımıldamaz
 
 // --- Metin bantları: satır ya da kelime başına katmanın kırpılmış bir kopyası, okuma sırasıyla yükselip netleşir.
 // Hepsi açılınca kopyalar kalkar ve katmanın kendisi görünür: son kare PowerPoint'in çizdiğiyle aynıdır. ---
 function textParts(g,s){
+  const mid={}; s.parts.forEach(([x,y,w])=>{ const k=Math.round(y); mid[k]=mid[k]||[1e9,-1e9]; mid[k][0]=Math.min(mid[k][0],x); mid[k][1]=Math.max(mid[k][1],x+w); });
   return s.parts.map(([x,y,w,h,t0])=>{
+    const m=mid[Math.round(y)], off=(x+w/2)-(m[0]+m[1])/2;
     const cp=el('clipPath',{id:'srt'+(uid++),clipPathUnits:'userSpaceOnUse'});
     cp.appendChild(el('rect',{x,y,width:w,height:h})); defs().appendChild(cp);
     const c=g.cloneNode(true); c.removeAttribute('id'); c.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));
     c.removeAttribute('data-a'); c.removeAttribute('data-k');
     const wrap=el('g',{'clip-path':`url(#${cp.id})`}); wrap.appendChild(c); g.parentNode.insertBefore(wrap,g.nextSibling);
-    return {c,wrap,t0,blur:blurrer(c)};
+    return {c,wrap,t0,off,blur:blurrer(c)};
   });
 }
 
@@ -85,16 +83,15 @@ function sweeper(g){
   const id=uid++, m=el('mask',{id:'srm'+id,maskUnits:'userSpaceOnUse',x:b.x,y:b.y,width:b.w,height:b.h});
   m.style.maskType='alpha'; m.appendChild(set(im.cloneNode(),{})); defs().appendChild(m);
   const gr=el('linearGradient',{id:'srg'+id,gradientUnits:'userSpaceOnUse'});
-  [[0,0],[0.5,0.32],[1,0]].forEach(([o,a])=>gr.appendChild(el('stop',{offset:o,'stop-color':'#fff','stop-opacity':a})));
-  defs().appendChild(gr);
+  const span=sweepStops(gr,200*K,65*K); defs().appendChild(gr);
   const r=el('rect',{x:b.x,y:b.y,width:b.w,height:b.h,fill:`url(#srg${id})`,mask:`url(#srm${id})`});
   r.style.mixBlendMode='screen'; g.appendChild(r);
-  const band=0.45*Math.max(b.w,b.h);
+  const band=span;
   return u=>{ const p=(u-0.45)/1.0;
     if(p<=0||p>=1){ r.setAttribute('display','none'); return; }
     r.removeAttribute('display');
     const x=b.x-band+(b.w+2*band)*inout(p), y=b.y;
-    set(gr,{x1:x-band/2,y1:y-band*0.35,x2:x+band/2,y2:y+band*0.35}); };
+    set(gr,{x1:x-band,y1:y-band*0.47,x2:x+band,y2:y+band*0.47}); };
 }
 
 // --- Sayaç parıltısı: sayı yerine oturunca son karenin bulanık bir kopyası kısa bir an parlar ---
@@ -172,16 +169,22 @@ async function renderMedia(t){
   if(media.length) await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
 }
 
+/*FX_JS*/
+const FXU=fxSetup(items), bgBlur=blurrer(document.getElementById('sr-bg'));
+
 function render(t){
   const R=(STYLE.rise||20)*K, B=(STYLE.blur||0)*K, P=STYLE.pop||0;
-  const pop=(u,d)=>mix(out3(u/d),back(u/(d*1.1)),P);            // yaylanma payı tarza göre
+  const pop=(u,d)=>mix(out3(u/d),spring(u,170,13),P);            // yay fiziğiyle yerine oturma, tarza göre
   const bg=document.getElementById('sr-bg');
   bg.style.transformBox='view-box'; bg.style.transformOrigin='0 0';
   bg.style.transform=(CAM.zoom||1)>1.0001 ? camera(t,BGD)            // kamera yoksa arka plan çok hafif yaklaşır
     : `translate(${VB[0]/2}px,${VB[1]/2}px) scale(${1.025-0.025*inout(t/Math.max(CAM.end||DUR,0.1))}) translate(${-VB[0]/2}px,${-VB[1]/2}px)`;
   for(const c of cams) c.w.style.transform=camera(t,c.d);
+  bgBlur(FX&&!STYLE.cont&&(CAM.zoom||1)>1.0001 ? 7*K*(1-inout(t/Math.max(CAM.end||1,.1))) : 0);   // alan derinliği
+  for(const f of FXU) f(t);
   for(const it of items){
     const {s,g}=it, u=t-s.t0; let o=1, tf='', bl=0;
+    if(it.fxRender&&it.fxRender(t,u)) continue;
     switch(s.kind){
       case 'title': case 'text':
         o=out3(u/0.5); tf=`translateY(${(1-out3(u/0.8))*R}px)`; bl=B*(1-out3(u/0.7)); break;
@@ -201,7 +204,8 @@ function render(t){
       case 'number': {
         o=out3(u/0.3); tf=`scale(${0.85+0.15*pop(u,0.55)})`; bl=B*(1-out3(u/0.4));
         const k=out3(u/1.4);
-        if(it.frames.length>1){ const n=Math.round(k*(it.frames.length-1));
+        if(it.odoRender) it.odoRender(t,u);
+        else if(it.frames.length>1){ const n=Math.round(k*(it.frames.length-1));
           it.frames.forEach((im,i)=>im.setAttribute('display',i===n?'inline':'none')); }
         if(it.glow) it.glow(u); break;
       }
@@ -210,6 +214,8 @@ function render(t){
         it.clip.setAttribute('d', s.chart==='pie' ? wedge(x+w/2,y+h/2,Math.max(w,h),u<=0?0:p)
           : s.chart==='column' ? `M${x-pad},${y+h+pad}h${w+2*pad}v${-(h+2*pad)*p}h${-(w+2*pad)}z`
           : `M${x-pad},${y-pad}h${(w+2*pad)*p}v${h+2*pad}h${-(w+2*pad)*p}z`);
+        if(s.chart==='pie'&&FX) tf=`scaleY(${0.55+0.45*spring(u,110,15)})`;     // hafif 3B eğimden düzleşir
+        if(it.edge) it.edge(u,p);
         o=u>0?1:0; break;
       }
       case 'table': {                        // satır satır yukarıdan aşağı
@@ -224,7 +230,8 @@ function render(t){
       for(const p of it.text){ const v=t-p.t0;
         p.wrap.setAttribute('display',done||v<=0?'none':'inline');
         p.c.style.opacity=out3(v/0.45);
-        p.c.style.transform=`translateY(${(1-out3(v/0.7))*R*0.8}px)`;
+        const tr=FX&&s.kind==='title' ? p.off*0.35*(1-out3(v/0.9)) : 0;     // başlıkta harf aralığı daralarak oturur
+        p.c.style.transform=`translate(${tr}px,${(1-out3(v/0.7))*R*0.8}px)`;
         p.blur(B*(1-out3(v/0.6))); }
       continue;
     }
@@ -240,6 +247,13 @@ function render(t){
     }
   }
   return renderMedia(t);
-}render(0);
+}
+// Katmanlar ve efekt görselleri yüklenmeden ilk kare alınmaz (render.cjs bekler)
+window.SR_READY=Promise.all([...svg.querySelectorAll('image')].map(im=>{
+  const u=im.getAttribute('href'); if(!u) return null;
+  const i=new Image(); i.src=u; return i.decode().catch(()=>null);
+}).concat(FX_READY));
+window.SR_MOVING=t=>t<(STYLE.still??DUR);           // hareket bulanıklığı yalnızca hareket varken
+render(0);
 </script>
 </body></html>

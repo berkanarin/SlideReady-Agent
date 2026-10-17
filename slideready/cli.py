@@ -190,7 +190,8 @@ def cmd_export(a):
         q["fps"] = a.fps
     cdir = work / "clips"
     cdir.mkdir(exist_ok=True)
-    jobs = [dict(dir=str(work / "scenes" / f"{no:03d}"), out=str(cdir / f"{no:03d}.mp4"), **q) for no, _, _ in built]
+    jobs = [dict(dir=str(work / "scenes" / f"{no:03d}"), out=str(cdir / f"{no:03d}.mp4"), mb=a.motion_blur, **q)
+            for no, _, _ in built]
     print(f"\n{len(jobs)} slayt render ediliyor ({q['width']}x{q['height']}, {q['fps']} fps)…")
     render(jobs, work)
     for no, _, _ in built:
@@ -225,6 +226,8 @@ def main(argv=None):
             s.add_argument("-o", "--output", help="çıktı PPTX (varsayılan: SUNUM-SlideReady.pptx)")
             s.add_argument("--quality", choices=["1080", "720"], default="1080")
             s.add_argument("--fps", type=int)
+            s.add_argument("--motion-blur", type=int, default=4,
+                           help="hareket bulanıklığı alt kare sayısı (1 = kapalı, varsayılan 4)")
     a = p.parse_args(argv)
     if a.cmd == "doctor":
         sys.exit(0 if doctor_main(a.json) else 1)

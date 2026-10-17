@@ -163,6 +163,55 @@ class Motion(unittest.TestCase):
         self.assertIsNone(text_parts(g, True))
 
 
+class Effects(unittest.TestCase):
+    """Gösteri efektlerinin veri tarafı (saf Python): parçacıklar, renk paleti, süreklilik kaydırması, efekt seçimi."""
+
+    def test_particles_come_from_layer_pixels(self):
+        from PIL import Image, ImageDraw
+        from slideready.fx import PARTICLES_MIN, particles
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "t.png"
+            im = Image.new("RGBA", (400, 100), (0, 0, 0, 0))
+            ImageDraw.Draw(im).rectangle((100, 20, 299, 79), fill=(250, 200, 10, 255))
+            im.save(f)
+            p = particles(f, [1000, 2000, 5000, 3000], seed=7)
+            self.assertEqual(p, particles(f, [1000, 2000, 5000, 3000], seed=7))      # belirlenimci
+        self.assertGreaterEqual(p["n"], min(PARTICLES_MIN, 200 * 60))
+        xs, ys = p["xy"][0::2], p["xy"][1::2]
+        self.assertTrue(all(2000 <= x <= 4000 for x in xs) and all(2200 <= y <= 2800 for y in ys))
+        self.assertEqual(set(zip(p["rgb"][0::3], p["rgb"][1::3], p["rgb"][2::3])), {(250, 200, 10)})
+
+    def test_palette_finds_accent(self):
+        from PIL import Image, ImageDraw
+        from slideready.fx import palette
+        with tempfile.TemporaryDirectory() as tmp:
+            bg, full = Path(tmp) / "bg.png", Path(tmp) / "full.png"
+            Image.new("RGB", (192, 108), (5, 10, 80)).save(bg)
+            im = Image.new("RGB", (192, 108), (5, 10, 80))
+            ImageDraw.Draw(im).rectangle((10, 10, 60, 60), fill=(255, 200, 0))
+            im.save(full)
+            pal = palette(full, bg)
+        self.assertGreater(pal["accent"][0], 0.9)
+        self.assertLess(pal["accent"][2], 0.2)
+        self.assertLess(pal["base"][0], 0.1)
+
+    def test_effect_choice(self):
+        from slideready.fx import CONTINUITY, apply
+        scene = [dict(id="p1", kind="title", t0=0.2, x=0, y=0, w=100, h=50, parts=[[0, 0, 50, 50, 0.3]]),
+                 dict(id="p2", kind="number", t0=0.8, x=0, y=100, w=100, h=50)]
+        groups = {"p2": dict(odo=dict(cols=[]))}
+        st = dict(name="sinematik", zoom=1.07)
+        last = apply(scene, st, dict(lead="number"), dict(full=str(ROOT / "yok.png"), opening=str(ROOT / "yok.png"), prev=str(ROOT / "prev.png")), groups, 1e6)
+        self.assertTrue(st["fx"] and st["cont"]["dur"] == CONTINUITY)
+        self.assertAlmostEqual(scene[0]["t0"], 0.2 + CONTINUITY * 0.55, places=3)   # süreklilik sahneyi kaydırır
+        self.assertAlmostEqual(scene[0]["parts"][0][4], 0.3 + CONTINUITY * 0.55, places=3)
+        self.assertIn("odo", scene[1])
+        self.assertGreater(last, scene[1]["t0"])
+        st2 = dict(name="sakin", zoom=1.0)
+        self.assertEqual(apply([], st2, {}, {}, {}, 1e6), 0.0)
+        self.assertFalse(st2["fx"])
+
+
 class ImageRegions(unittest.TestCase):
     """Metin/şekil resim olarak konmuşsa resim okuma sırasıyla bloklara ayrılır; fotoğraf bölünmez."""
 

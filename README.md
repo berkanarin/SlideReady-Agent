@@ -95,6 +95,7 @@ bin/slideready preview  sunum.pptx                 # en zengin 2 slayt, 960×540
 bin/slideready preview  sunum.pptx --slides 3,7    # belirli slaytlar
 bin/slideready export   sunum.pptx                 # tüm slaytlar, 1080p 60 fps → sunum-SlideReady.pptx
 bin/slideready export   sunum.pptx --quality 720   # daha küçük dosya
+bin/slideready export   sunum.pptx --motion-blur 1 # hareket bulanıklığı kapalı: daha hızlı render
 ```
 
 `plan.json` slayt başına şu alanları içerir:
@@ -104,6 +105,8 @@ bin/slideready export   sunum.pptx --quality 720   # daha küçük dosya
 | `animate` | `false`: slayt sabit kalır, video eklenmez |
 | `style` | `auto` (varsayılan): ajan slayt başına seçer ve gerekçeyi `note`'a yazar (`chosen`, `zoom`, `lead`). Elle: `sinematik` (kamera, derinlik, odak çekme, kelime/satır metin, ışık süzmesi), `sakin`, `enerjik` |
 | `tempo` | 1.0 normal, 0.8 sakin, 1.2 hızlı (tarzın kendi temposuyla çarpılır) |
+| `effects` | `true` (varsayılan): gösteri efektleri — kapakta başlık parçacıklardan toplanır, sayılar odometre gibi rakam rakam döner, büyük görseller mürekkep/yanık kenarla açılır, slaydın renklerinden akan ışık perdesi, kapak/bölümde ışık sızması, grafiklerde parlayan ilerleme kenarı. `false`: yalnızca tarzın temel hareketleri |
+| `continuity` | `true` (varsayılan): klip önceki slaydın son karesinden başlar ve değişen yerlerde bükülüp eriyerek bu slayda açılır; ortak öğeler (logo, şerit) kımıldamaz. Sunum sırayla oynatılınca tek bir film gibi akar |
 | `hold` | Son hareketten sonraki okuma payı (sn, en az 2) |
 | `static` | Hareket etmemesi gereken şekil adları (logo, dipnot…) |
 

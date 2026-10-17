@@ -67,6 +67,11 @@ tutucu metin kalmış bir slayt).
   bitince parlar), `sakin` (kamera yok, yumuşak netleşme ve satır satır metin; resmî sunumlar için), `enerjik` (daha
   yakın kamera, yaylanan ikonlar ve sayılar, hızlı tempo; tanıtım ve lansman için). Kullanıcı "daha sade" derse
   `sakin`, "daha hareketli" derse `enerjik`. Hepsi PowerPoint'in çizdiği aynı son kareye varır.
+- `effects` (varsayılan `true`) ve `continuity` (varsayılan `true`): gösteri efektleri ve slaytlar arası kesintisiz geçiş.
+  Hangi efektin nerede oynayacağına `analyze`'ın kararına göre motor karar verir (kapakta parçacıklardan toplanan
+  başlık, sayı slaytlarında odometre, büyük görselde mürekkep açılışı); slayt başına tek bir kahraman efekt olur.
+  Kullanıcı "efekt istemiyorum" derse `effects: false`; "slaytlar ayrı başlasın" derse `continuity: false`.
+  `sakin` tarzında efektler kapalıdır.
 - `tempo`: 1.0 normal; 0.8 daha sakin, 1.2 daha hızlı. Kullanıcı "yavaş/hızlı" derse bunu değiştir.
 - `hold`: son hareketten sonraki durağan okuma payı (sn). Varsayılan metin miktarına göre 2–5 sn arasıdır;
   2'nin altına indirme.
@@ -98,6 +103,9 @@ Bu dosyayı düzenledikten sonra komutları yeniden çalıştır; kullanıcı d�
 Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`). Çözülmüyorsa sorunu dürüstçe raporla.
 
 ## 6. Çıktı
+
+- Çıktı varsayılan olarak hareket bulanıklığıyla (4 alt kare) render edilir; 1080p60'ta 30 sn'lik video için
+  yaklaşık 7 dakika sürer. Kullanıcı acele ediyorsa `--motion-blur 1` (hareket anlarında 4 kat daha az kare çekilir).
 
 - `bin/slideready export SUNUM.pptx` (varsayılan 1080p 60 fps; büyük sunumlarda `--quality 720` dosyayı küçültür).
 - Çıktı `SUNUM-SlideReady.pptx`: orijinal sunumun kopyası. Her canlandırılan slaytın en üst katmanında kendi

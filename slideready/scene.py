@@ -4,9 +4,11 @@ import os
 import re
 from pathlib import Path
 
+from . import fx as fxmod
 from . import media as mediamod
 
 TEMPLATE = Path(__file__).with_name("scene.html")
+FXJS = Path(__file__).with_name("fx.js")
 STAGGER, CLUSTER_GAP = 0.07, 0.16      # küme içi ve kümeler arası gecikme (sn)
 MOTION_TAIL = 1.6                       # son başlayan hareketin bitmesi için pay
 REGION_STAGGER = 0.14                   # resim içi bloklar arasındaki gecikme
@@ -255,7 +257,13 @@ def build(slide, layer, svgdeck, plan, outdir):
                 times = _schedule_text(d, parts, st)
                 d["parts"] = [p[:4] + [tt] for p, tt in zip(parts, times)]
                 last = max(last, times[-1])
+    before = scene[0]["t0"] if scene else 0.0
+    fx_last = fxmod.apply(scene, st, plan, layer, groups, svgdeck.viewbox[2] * svgdeck.viewbox[3])
+    shift = (scene[0]["t0"] - before) if scene else 0.0      # süreklilik geçişi sahneyi ileri kaydırır
+    duration = round(duration + shift, 2)
+    last = max(last + shift, fx_last)
     duration = max(duration, round(last + 0.9 / st["tempo"] + hold, 2))
+    st["still"] = round(duration - hold, 3)                  # bundan sonra (medya dışında) hiçbir şey kımıldamaz
     # kamera: başlığın (yoksa ilk öğenin) üstünden geri çekilir; son öğe yerine oturunca durur
     first = next((d for d in scene if d["kind"] == "title"), scene[0] if scene else None)
     settle = max((d["t0"] for d in scene), default=0) + 1.1 / st["tempo"]
@@ -276,6 +284,7 @@ def build(slide, layer, svgdeck, plan, outdir):
             .replace("/*BG*/", uses).replace("/*SLIDE*/", layer["body"])
             .replace("/*SCENE*/", json.dumps(scene, ensure_ascii=False))
             .replace("/*MEDIA*/", json.dumps(media, ensure_ascii=False))
+            .replace("/*FX_JS*/", FXJS.read_text(encoding="utf-8"))
             .replace("/*STYLE*/", json.dumps(st, ensure_ascii=False))
             .replace("/*DUR*/", str(duration)).replace("/*VBW*/", str(svgdeck.viewbox[2]))
             .replace("/*VBH*/", str(svgdeck.viewbox[3])))
