@@ -1,7 +1,7 @@
 """Hareketli medya: animasyonlu GIF'ler ve videolar (slaytta, düzende ya da asıl slaytta).
 
-LibreOffice SVG'de bunları tek bir durağan kare olarak yazar (video içeren sunumlarda dışa aktarım hiç
-çalışmayabilir). Bu modül medyayı bulur, kareleri ffmpeg ile çıkarır; sahne her anda doğru kareyi gösterir. Böylece
+PowerPoint katmanlarında bunlar tek bir durağan kare olarak görünür. Bu modül medyayı bulur, kareleri ffmpeg ile
+çıkarır; sahne her anda doğru kareyi gösterir. Böylece
 arka plan videosu ya da GIF, verilerle birlikte tek bir bütün olarak oynar.
 """
 import io
@@ -112,7 +112,7 @@ def _probe(path):
 def collect(deck, work):
     """Her slayt için hareketli medya listesi; medya dosyaları work/media/ altına bir kez yazılır.
 
-    Döner: {slayt_no: [dict(type, name, layer, x, y, w, h, file, duration, audio)]}
+    Döner: {slayt_no: [dict(type, name, sid, layer, x, y, w, h, file, duration, audio)]}
     """
     prs = Presentation(str(deck))
     mdir = work / "media"
@@ -136,7 +136,7 @@ def collect(deck, work):
                         f.write_bytes(part.blob)
                     dur, audio = _probe(f) if k == "video" else (0.0, False)
                     files[key] = dict(file=str(f), duration=round(dur, 2), audio=audio)
-                items.append(dict(type=k, name=sh.name, layer=layer, x=x, y=y, w=w, h=h, **files[key]))
+                items.append(dict(type=k, name=sh.name, sid=sh.shape_id, layer=layer, x=x, y=y, w=w, h=h, **files[key]))
         if items:
             out[no] = items
     return out
@@ -159,29 +159,3 @@ def frames(item, width=None):
                         str(d / f"f%05d.{ext}")], check=True)
         stamp.write_text(str(len(list(d.glob(f"f*.{ext}")))), encoding="utf-8")
     return d, int(stamp.read_text(encoding="utf-8")), ext
-
-
-def strip_video(deck, dst):
-    """LibreOffice için geçici kopya: video şekilleri poster görselli düz resme çevrilir (video içeren sunumların SVG
-    dışa aktarımı LibreOffice'te başarısız olabiliyor). Değişiklik olduysa dst'ye yazar ve True döner."""
-    prs = Presentation(str(deck))
-    owners = list(prs.slides) + list(prs.slide_layouts) + list(prs.slide_masters)
-    changed = False
-    for owner in owners:
-        for el in owner.shapes._spTree.iter(f"{P}pic"):
-            nvpr = el.find(f"{P}nvPicPr/{P}nvPr")
-            if nvpr is None:
-                continue
-            for media in list(nvpr.iter(f"{A}videoFile")) + list(nvpr.iter(f"{A}audioFile")):
-                media.getparent().remove(media)
-                changed = True
-            ext = nvpr.find(f"{P}extLst")
-            if ext is not None and ext.find(f".//{P14}media") is not None:
-                nvpr.remove(ext)
-                changed = True
-        timing = owner._element.find(f"{P}timing")
-        if changed and timing is not None and timing.find(f".//{P}video") is not None:
-            owner._element.remove(timing)
-    if changed:
-        prs.save(str(dst))
-    return changed

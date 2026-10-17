@@ -1,6 +1,7 @@
 """PPTX envanteri: her slayttaki şekillerin konumu, türü, metni ve verisi.
 
-Koordinatlar LibreOffice SVG birimindedir (1/100 mm = EMU / 360), böylece SVG gruplarıyla doğrudan eşlenir.
+Koordinatlar sahne SVG birimindedir (1/100 mm = EMU / 360). Her şeklin kimliği (sid) PowerPoint'teki Shape.Id ile
+aynıdır; katmanlar bu kimlikle çizilir ve sahnedeki grup kimliği "p<sid>" olur.
 """
 import re
 from pptx import Presentation
@@ -40,7 +41,7 @@ def chart_kind(chart):
 
 def _shape(sh, W, H, off=(0, 0, 1, 1)):
     ox, oy, sx, sy = off
-    d = dict(name=sh.name, x=ox + sh.left * sx / U, y=oy + sh.top * sy / U, w=sh.width * sx / U, h=sh.height * sy / U)
+    d = dict(name=sh.name, sid=sh.shape_id, id=f"p{sh.shape_id}", x=ox + sh.left * sx / U, y=oy + sh.top * sy / U, w=sh.width * sx / U, h=sh.height * sy / U)
     text = sh.text_frame.text.strip() if sh.has_text_frame else ""
     if getattr(sh, "has_chart", False) and sh.has_chart:
         c = sh.chart

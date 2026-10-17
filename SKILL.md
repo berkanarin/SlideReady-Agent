@@ -34,8 +34,10 @@ anlatma, sonucu göster.
 ## 0. Kurulum
 
 - `bin/slideready doctor` her satırı ✓/✗ ile verir ve eksik için kurulum komutunu yazar.
-- `scripts/setup.sh` sistem paketlerini (LibreOffice, ffmpeg, Node), Python paketlerini ve Playwright Chromium'u
-  kurar. `sudo` isteyebilir; izin gerekiyorsa kullanıcıya hangi komutu çalıştıracağını tek satırla söyle.
+- Slaytları kullanıcının kendi PowerPoint'i çizer (Windows, COM): PowerPoint yoksa `preview`/`export` çalışmaz.
+  `doctor`'da "PowerPoint (COM)" ✗ ise kullanıcıya masaüstü PowerPoint gerektiğini söyle.
+- `scripts\setup.ps1` (Windows) ffmpeg ve Node'u, Python paketlerini (pywin32 dahil) ve Playwright Chromium'u kurar.
+  İzin gerekiyorsa kullanıcıya hangi komutu çalıştıracağını tek satırla söyle.
 - Kurulum bitince kullanıcıya tek cümle: "Hazır, PPTX'ini gönderebilirsin."
 
 ## 1–2. Analiz ve plan
@@ -96,8 +98,8 @@ Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`).
 
 - Grafikler maskeyle açılır (pasta/halka saat yönünde, sütun aşağıdan, çubuk ve çizgi soldan). Seri seri
   yeniden çizim yol haritasındadır.
-- Font slaytta var ama sistemde yoksa LibreOffice benzeriyle değiştirir; görünüm değişebilir. Kullanıcıdan fontu
-  kurmasını isteyebilirsin.
+- Görüntü PowerPoint'in kendi çizimidir: font sistemde yoksa PowerPoint'te nasıl görünüyorsa videoda da öyle görünür.
+- Tablo hücrelerindeki sayılar saymaz (tablo satır satır açılır); tek başına duran sayılar sayar.
 - SmartArt ve gömülü Excel nesneleri tek parça olarak açılır.
 - Metin, şekil ya da grafik slayta **resim olarak** konmuşsa (ekran görüntüsü vb.) ve resmin zemini düz renkli ya da
   saydamsa, resim okuma sırasıyla blok blok açılır (`analyze` notu: "resim içinde N blok"). Resimdeki sayılar

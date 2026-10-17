@@ -45,9 +45,9 @@ Okunabilirlik kuralları: metin hiçbir zaman hareketli bir görselin üstünden
 ## Nasıl çalışır
 
 ```
-PPTX ──python-pptx──▶ şekil envanteri (tür, metin, grafik verisi, tablo)
-  │                                    │  konum kutusuyla eşleme
-  └──LibreOffice──▶ SVG (her şekil kendi katmanında, birebir yerinde)
+PPTX ──python-pptx──▶ şekil envanteri (tür, metin, grafik verisi, tablo, şekil kimliği)
+  │                                    │  aynı şekil kimliği
+  └──PowerPoint (COM)──▶ arka plan + şekil başına saydam katman (gölge, parlama dahil)
                                        ▼
                      koreografi (plan.json ile ayarlanır)
                                        ▼
@@ -57,11 +57,17 @@ PPTX ──python-pptx──▶ şekil envanteri (tür, metin, grafik verisi, ta
 ```
 
 - Model koordinat üretmez; yerleşim her zaman dosyadan gelir. Ajanın tek ayar kolu `plan.json`'dur.
+- Görüntüyü kullanıcının kendi PowerPoint'i çizer: fontlar, efektler ve arka plan görselleri PowerPoint'te nasıl
+  görünüyorsa öyledir. Her şekil yalnızca kendisi görünürken bir kez beyaz, bir kez siyah zeminde dışa aktarılır; iki
+  karenin farkından tam saydamlık çıkar. Katmanlar üst üste konunca PowerPoint'in kendi slayt görüntüsüyle karşılaştırılır
+  (`layers/NNN/layers.json` → `fidelity`); hareketin son karesi PowerPoint'in çizdiğiyle aynıdır.
+- Sayaçlar için PowerPoint sayının ara değerlerini de çizer (metin geçici olarak değiştirilir; dosya kaydedilmez).
 - Her şey yerelde çalışır; sunum hiçbir servise gönderilmez.
 
 ## Kurulum
 
-Gerekenler: Python 3.9+, LibreOffice, ffmpeg, Node.js 18+ ve Playwright Chromium.
+Gerekenler: Windows ve masaüstü Microsoft PowerPoint, Python 3.9+ (pywin32 ile), ffmpeg, Node.js 18+ ve Playwright
+Chromium. PowerPoint olmayan bir makinede `analyze` çalışır, `preview`/`export` çalışmaz.
 
 ```bash
 git clone https://github.com/berkanarin/SlideReady-Agent.git
@@ -71,8 +77,7 @@ bin/slideready doctor          # her şey ✓ olmalı
 ```
 
 Elle kurmak isterseniz: `pip install -r requirements.txt`, `npm install`, `npx playwright install chromium`, ayrıca
-LibreOffice ve ffmpeg (macOS: `brew install --cask libreoffice && brew install ffmpeg`, Ubuntu:
-`sudo apt-get install libreoffice-impress ffmpeg`).
+ffmpeg (`winget install Gyan.FFmpeg`).
 
 ### Claude'a skill olarak eklemek
 

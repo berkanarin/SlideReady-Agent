@@ -17,7 +17,11 @@ svg g[data-a="line"]{transform-origin:left top}
 const SCENE=/*SCENE*/, MEDIA=/*MEDIA*/, DUR=/*DUR*/;
 const K=/*VBW*/ / 1920;                   // 1920 genişlikte 1 piksel = K svg birimi
 const svg=document.querySelector('body>svg'), NS='http://www.w3.org/2000/svg';
-svg.querySelectorAll('[visibility="hidden"]').forEach(n=>{ if(n.querySelector('[id^="container-"]')) n.removeAttribute('visibility'); });
+// Katmanlar PowerPoint'in çizdiği PNG'lerdir: ilk kareden önce hepsi yüklenmiş olmalı (render.cjs bunu bekler)
+window.SR_READY=Promise.all([...svg.querySelectorAll('image')].map(im=>{
+  const u=im.getAttribute('href'); if(!u) return null;
+  const i=new Image(); i.src=u; return i.decode().catch(()=>null);
+}));
 
 const clamp=x=>Math.max(0,Math.min(1,x));
 const out3=x=>1-Math.pow(1-clamp(x),3);
@@ -72,7 +76,10 @@ const items=SCENE.map((s,i)=>{
   const g=document.getElementById(s.id); if(!g) return null;
   g.setAttribute('data-a',s.kind);
   const it={s,g};
-  if(s.kind==='number') it.nums=counters(g);
+  if(s.kind==='number'){                  // PowerPoint'in ara değerlerle çizdiği kareler (son kare şeklin kendisi)
+    it.frames=[...g.querySelectorAll('image[data-n]')].sort((a,b)=>a.dataset.n-b.dataset.n);
+    it.nums=counters(g);
+  }
   if(s.kind==='chart'||s.kind==='table'){
     const cp=document.createElementNS(NS,'clipPath'); cp.id='src'+i; cp.setAttribute('clipPathUnits','userSpaceOnUse');
     it.clip=document.createElementNS(NS,'path'); cp.appendChild(it.clip);
@@ -83,24 +90,13 @@ const items=SCENE.map((s,i)=>{
   return it;
 }).filter(Boolean);
 
-// Hareketli medya (GIF, video): LibreOffice'in durağan karesini taşıyan <image> öğeleri bulunur, her anda doğru
-// kare gösterilir. Paylaşılan görsel <use> ile çağrılıyorsa çağrılan görsel değişir.
+// Hareketli medya (GIF, video): slayttaki medya şeklinin katmanı (data-media, şeklin kendi kutusunda) her anda doğru
+// kareyi gösterir. Düzen ya da asıl slayttaki medya, onsuz çizilmiş arka planın (bgm.png) üstüne yerleştirilir.
 function imageBox(im){ const a=n=>parseFloat(im.getAttribute(n))||0; return {x:a('x'),y:a('y'),w:a('width'),h:a('height')}; }
-function useBox(u){
-  const ref=document.getElementById((u.getAttribute('href')||u.getAttribute('xlink:href')||'').slice(1));
-  if(!ref||ref.tagName!=='image') return null;
-  const b=imageBox(ref), m=u.transform.baseVal.consolidate(), ux=parseFloat(u.getAttribute('x'))||0, uy=parseFloat(u.getAttribute('y'))||0;
-  let p=[b.x+ux,b.y+uy,b.x+ux+b.w,b.y+uy+b.h];
-  if(m){ const k=m.matrix, X=(x,y)=>k.a*x+k.c*y+k.e, Y=(x,y)=>k.b*x+k.d*y+k.f;
-    const xs=[X(p[0],p[1]),X(p[2],p[3])], ys=[Y(p[0],p[1]),Y(p[2],p[3])];
-    p=[Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys)]; }
-  return {ref, x:p[0], y:p[1], w:p[2]-p[0], h:p[3]-p[1]};
-}
 const media=MEDIA.map(m=>{
   const tol=30+0.03*Math.max(m.w,m.h), near=b=>b&&['x','y','w','h'].every(k=>Math.abs(b[k]-m[k])<tol);
-  const els=new Set([...svg.querySelectorAll('image')].filter(im=>near(imageBox(im))));
-  svg.querySelectorAll('use').forEach(u=>{ const b=useBox(u); if(near(b)) els.add(b.ref); });
-  if(!els.size){                          // durağan kare bulunamadı: medyayı arka planın üstüne yerleştir
+  const els=new Set([...svg.querySelectorAll('image[data-media]')].filter(im=>near(imageBox(im))));
+  if(!els.size){                          // düzen/asıl slayt medyası: arka planın üstüne yerleştir
     const im=document.createElementNS(NS,'image');
     for(const [k,v] of Object.entries({x:m.x,y:m.y,width:m.w,height:m.h,preserveAspectRatio:'none'})) im.setAttribute(k,v);
     document.getElementById('sr-bg').appendChild(im); els.add(im);
@@ -136,7 +132,10 @@ function render(t){
       case 'text':   o=out3(u/0.6); tf=`translateY(${(1-out3(u/0.7))*14*K}px)`; break;
       case 'number': {
         o=out3(u/0.3); tf=`scale(${0.88+0.12*back(u/0.5)})`;
-        const k=out3(u/1.4); it.nums.forEach(c=>setCount(c,k)); break;
+        const k=out3(u/1.4); it.nums.forEach(c=>setCount(c,k));
+        if(it.frames.length>1){ const n=Math.round(k*(it.frames.length-1));
+          it.frames.forEach((im,i)=>im.setAttribute('display',i===n?'inline':'none')); }
+        break;
       }
       case 'chart': {
         const p=out3(u/1.4), {x,y,w,h}=s, pad=300;

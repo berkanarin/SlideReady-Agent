@@ -23,7 +23,9 @@ başlamadan önce onu oku ve adım adım uygula.
 
 ## Geliştirme
 
-- Kod: `slideready/` (Python CLI) + `slideready/render.cjs` (Playwright) + `slideready/scene.html` (hareket dili).
-- Test: `python3 -m unittest discover tests`; uçtan uca: `bin/slideready preview examples/demo.pptx`.
+- Kod: `slideready/` (Python CLI) + `slideready/pptrender.py` (PowerPoint COM ile katmanlar) +
+  `slideready/render.cjs` (Playwright) + `slideready/scene.html` (hareket dili).
+- Test: `python -m unittest discover tests` (PowerPoint gerektiren testler Windows dışında atlanır); uçtan uca:
+  `bin/slideready preview examples/demo.pptx`.
 - Örnek deste `examples/make_demo.py` ile üretilir; içerik kurgusaldır. Repoya gerçek kurum sunumu, logosu ya da
   verisi eklenmez.

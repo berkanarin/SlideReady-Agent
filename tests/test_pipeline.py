@@ -1,4 +1,6 @@
-"""Hızlı testler: python3 -m unittest discover tests  (LibreOffice gerektirir)"""
+"""Hızlı testler: python -m unittest discover tests
+
+Çizim testleri PowerPoint (Windows, COM) gerektirir ve başka yerde atlanır; geri kalanı saf Python'dır."""
 import json
 import shutil
 import subprocess
@@ -11,11 +13,17 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from slideready.deck import inventory, number_parts  # noqa: E402
-from slideready.layers import SvgDeck, convert, match  # noqa: E402
-from slideready.media import collect, strip_video  # noqa: E402
+from slideready.media import collect  # noqa: E402
+from slideready.pptrender import FRAMES, available, count_frames, matte, number_format, render  # noqa: E402
 from slideready.regions import blocks  # noqa: E402
 
 DEMO = ROOT / "examples" / "demo.pptx"
+POWERPOINT = available()[0]
+
+
+def run(*args):
+    return subprocess.run([sys.executable, "-m", "slideready", *map(str, args)], cwd=ROOT, check=True,
+                          capture_output=True)
 
 
 class Numbers(unittest.TestCase):
@@ -31,24 +39,78 @@ class Numbers(unittest.TestCase):
             self.assertIsNone(number_parts(s), s)
 
 
-@unittest.skipUnless(shutil.which("soffice") or shutil.which("libreoffice"), "LibreOffice yok")
+@unittest.skipUnless(POWERPOINT, "PowerPoint yok (yalnızca Windows)")
 class Layers(unittest.TestCase):
-    def test_every_shape_matches_a_layer(self):
-        inv = inventory(DEMO)
+    def test_every_shape_has_a_layer_and_matches_powerpoint(self):
         with tempfile.TemporaryDirectory() as tmp:
-            svg = SvgDeck(convert(DEMO, Path(tmp)))
+            run("analyze", DEMO, "-w", tmp)
+            inv = inventory(DEMO)
+            nos = [s["no"] for s in inv["slides"]]
+            deck = render(DEMO, inv, Path(tmp), nos, width=960, log=lambda *_: None)
             for s in inv["slides"]:
-                free = match(s["shapes"], svg.slide(s["no"])["groups"])
-                self.assertEqual([d["name"] for d in s["shapes"] if "id" not in d], [], f"slayt {s['no']}")
-                self.assertEqual(free, [], f"slayt {s['no']}")
+                info = deck.info[s["no"]]
+                self.assertEqual(info["missing"], [], f"slayt {s['no']}")
+                self.assertEqual(sorted(info["layers"]), sorted(str(d["sid"]) for d in s["shapes"]), f"slayt {s['no']}")
+                self.assertLess(info["fidelity"]["mean"], 1, f"slayt {s['no']}")
+                body = deck.slide(s["no"])["body"]
+                self.assertTrue(all(f'id="{d["id"]}"' in body for d in s["shapes"]))
+            # sayaç kareleri: 4 sayı şekli, her biri PowerPoint'in çizdiği ara değerlerle
+            nums = [d for d in inv["slides"][0]["shapes"] if d["kind"] == "number"]
+            self.assertEqual(len(nums), 4)
+            for d in nums:
+                self.assertEqual(len(deck.info[1]["layers"][str(d["sid"])]["frames"]), FRAMES - 1)
 
+
+class Analyze(unittest.TestCase):
     def test_analyze_writes_plan(self):
+        """analyze çizim yapmaz (PowerPoint gerekmez); şekil kimlikleri slayt içinde tekildir."""
         with tempfile.TemporaryDirectory() as tmp:
-            subprocess.run([str(ROOT / "bin" / "slideready"), "analyze", str(DEMO), "-w", tmp], check=True,
-                           capture_output=True)
+            run("analyze", DEMO, "-w", tmp)
+            self.assertFalse((Path(tmp) / "layers").exists())
             plan = json.loads((Path(tmp) / "plan.json").read_text(encoding="utf-8"))
             self.assertEqual(len(plan["slides"]), 4)
             self.assertTrue(all(p["animate"] for p in plan["slides"]))
+            inv = json.loads((Path(tmp) / "analysis.json").read_text(encoding="utf-8"))
+            ids = [d["id"] for d in inv["slides"][0]["shapes"]]
+            self.assertEqual(len(ids), len(set(ids)))
+
+
+class Matte(unittest.TestCase):
+    """Fark matlama: beyaz ve siyah zemin üzerindeki iki kareden renk ve saydamlık geri kazanılır."""
+
+    def test_recovers_color_and_alpha(self):
+        from PIL import Image
+        import numpy as np
+        rnd = np.random.default_rng(1)
+        color = rnd.integers(0, 256, (40, 60, 3)).astype(np.float32)
+        alpha = np.zeros((40, 60), np.float32)
+        alpha[10:30, 5:50] = rnd.random((20, 45))                  # yarı saydam gölge gibi
+        alpha[15:25, 20:30] = 1
+
+        def over(bg):
+            a = alpha[..., None]
+            return Image.fromarray((color * a + bg * (1 - a) + 0.5).astype(np.uint8))
+        im, box = matte(over(255.0), over(0.0))
+        self.assertEqual(box, (5, 10, 50, 30))
+        rgba = np.asarray(im, dtype=np.float32)
+        self.assertLess(np.abs(rgba[..., 3] / 255 - alpha).max(), 2 / 255)
+        a = alpha[..., None]
+        back = rgba[..., :3] * rgba[..., 3:] / 255 + 128 * (1 - rgba[..., 3:] / 255)
+        self.assertLess(np.abs(back - (color * a + 128 * (1 - a))).max(), 2)
+
+    def test_empty_layer(self):
+        from PIL import Image
+        _, box = matte(Image.new("RGB", (8, 8), "white"), Image.new("RGB", (8, 8), "black"))
+        self.assertIsNone(box)
+
+
+class CounterFrames(unittest.TestCase):
+    def test_keeps_number_format(self):
+        self.assertEqual(count_frames("12,4", 5), ["0,0", "3,1", "6,2", "9,3"])
+        self.assertEqual(count_frames("1.250", 3), ["0", "625"])
+        self.assertEqual(count_frames("3.250,75", 2), ["0,00"])
+        self.assertEqual(number_format("1.250")(1), "1.250")
+        self.assertEqual(number_format("12.500.000")(0.5), "6.250.000")
 
 
 class ImageRegions(unittest.TestCase):
@@ -95,38 +157,6 @@ class ImageRegions(unittest.TestCase):
         self.assertIsNone(blocks(self.png(im)))
 
 
-FAKE_SVG = """<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
- viewBox="0 0 33867 19050"><defs class="ClipPathGroup"/>
-<g id="id20" class="Master_Slide"><g id="bg-id20" class="Background"/><g id="bo-id20" class="BackgroundObjects">
-<g class="Graphic"><g><rect class="BoundingBox" stroke="none" fill="none" x="0" y="0" width="33867" height="19050"/>
-<use xlink:href="#bitmap7"/></g></g></g></g>
-<g class="DummySlide"></g>
-<g id="ooo:meta_slide_0" ooo:slide="id1" ooo:master="id20" ooo:master-objects-visibility="visible"/>
-<g visibility="hidden"><g id="container-id1"><g id="id1" class="Slide"><g class="Page">
-<g class="TextShape"><g id="id5"><rect class="BoundingBox" stroke="none" fill="none" x="100" y="200" width="300" height="400"/>
-<use xlink:href="#bitmap9" x="5"/></g></g></g></g></g></g>
-<defs class="EmbeddedBitmaps"><image id="bitmap7" x="0" y="0" width="33867" height="19050" xlink:href="data:x"/>
-<g id="bitmap9" visibility="hidden"><image width="1" height="1" style="fill:url(#grad3)"/></g>
-<linearGradient id="grad3"><stop offset="0"/></linearGradient></defs>
-</svg>"""
-
-
-class SharedBitmaps(unittest.TestCase):
-    """Yeni LibreOffice sürümleri tekrar eden görselleri bir kez tanımlayıp <use> ile çağırır; tanım slaytın ve
-    asıl slaytın dışında kalsa da sahneye taşınmalı (aksi hâlde arka plan görselleri kaybolur)."""
-
-    def test_definitions_outside_scene_are_copied(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            f = Path(tmp) / "x.svg"
-            f.write_text(FAKE_SVG, encoding="utf-8")
-            layer = SvgDeck(f).slide(1)
-        for ref in ("bitmap7", "bitmap9", "grad3"):          # asıl slayttan, slayttan ve dolaylı referans
-            self.assertIn(f'id="{ref}"', layer["body"], ref)
-        self.assertNotIn('<g id="bitmap9" visibility="hidden"', layer["body"])
-        self.assertEqual([g["id"] for g in layer["groups"]], ["id5"])
-        self.assertEqual(layer["uses"], ["bg-id20", "bo-id20"])
-
-
 def media_deck(tmp):
     """Kurgusal deste: 1. slaytta tam ekran arka plan videosu + üstünde veri, düzende animasyonlu bir GIF."""
     from PIL import Image, ImageDraw
@@ -161,8 +191,7 @@ def media_deck(tmp):
     return tmp / "media.pptx"
 
 
-@unittest.skipUnless((shutil.which("soffice") or shutil.which("libreoffice")) and shutil.which("ffmpeg"),
-                     "LibreOffice/ffmpeg yok")
+@unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg yok")
 class Media(unittest.TestCase):
     def test_collects_video_and_layout_gif(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -173,12 +202,8 @@ class Media(unittest.TestCase):
             video = next(m for m in media[1] if m["type"] == "video")
             self.assertAlmostEqual(video["duration"], 3, delta=0.2)
             self.assertTrue(video["audio"])
-            # video içeren sunum LibreOffice'te SVG'ye çevrilemeyebiliyor: poster görseline çevrilmiş kopya çevrilir
-            self.assertTrue(strip_video(deck, Path(tmp) / "s.pptx"))
-            svg = SvgDeck(convert(Path(tmp) / "s.pptx", Path(tmp) / "svg"))
-            self.assertEqual(len(svg.meta), 2)
 
-    @unittest.skipUnless(shutil.which("node"), "Node yok")
+    @unittest.skipUnless(POWERPOINT and shutil.which("node"), "PowerPoint/Node yok")
     def test_background_video_plays_in_scene(self):
         """Medya açıkken iki an arasındaki fark, medya kapalıyken olandan çok daha büyük olmalı."""
         from PIL import Image, ImageChops, ImageStat
@@ -186,13 +211,11 @@ class Media(unittest.TestCase):
             deck, work = media_deck(tmp), Path(tmp) / "w"
 
             def change(media_on):
-                subprocess.run([str(ROOT / "bin" / "slideready"), "analyze", str(deck), "-w", str(work)], check=True,
-                               capture_output=True)
+                run("analyze", deck, "-w", work)
                 plan = json.loads((work / "plan.json").read_text(encoding="utf-8"))
                 plan["slides"][0]["media"] = media_on
                 (work / "plan.json").write_text(json.dumps(plan), encoding="utf-8")
-                subprocess.run([str(ROOT / "bin" / "slideready"), "preview", str(deck), "-w", str(work), "--slides", "1"],
-                               check=True, capture_output=True)
+                run("preview", deck, "-w", work, "--slides", "1")
                 stills = sorted((work / "scenes" / "001").glob("still-*.png"), key=lambda p: float(p.stem[6:]))
                 a, b = (Image.open(p).convert("RGB") for p in (stills[0], stills[2]))
                 for p in stills:
@@ -203,6 +226,11 @@ class Media(unittest.TestCase):
             self.assertGreater(on, 4 * off + 5, (on, off))
             scene = json.loads((work / "scenes" / "001" / "scene.json").read_text(encoding="utf-8"))
             self.assertEqual(scene["media"], [])
+            # düzendeki GIF onsuz çizilmiş arka planın (bgm.png) üstünde oynar: ilk karesi altta kalmaz
+            bg, bgm = (Image.open(work / "layers" / "001" / n).convert("RGB") for n in ("bg.png", "bgm.png"))
+            box = ImageChops.difference(bg, bgm).getbbox()
+            self.assertIsNotNone(box)
+            self.assertLess(box[2], bg.width * 0.15)
 
 
 if __name__ == "__main__":

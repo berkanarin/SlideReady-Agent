@@ -12,7 +12,7 @@ const conc = Math.max(1, +(process.env.SLIDEREADY_JOBS || 3));
 async function run(browser, j) {
   const page = await browser.newPage({ viewport: { width: j.width, height: j.height } });
   await page.goto('file://' + path.resolve(j.dir, 'index.html'));
-  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(() => Promise.all([document.fonts.ready, window.SR_READY]));
   const dur = await page.evaluate(() => DUR);
   if (j.at) {
     for (const t of j.at) {

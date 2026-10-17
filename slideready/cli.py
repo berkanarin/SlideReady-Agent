@@ -7,7 +7,6 @@
 """
 import argparse
 import json
-import os
 import re
 import shutil
 import subprocess
@@ -18,8 +17,8 @@ from . import __version__
 from .deck import inventory
 from .doctor import main as doctor_main, node_env
 from .embed import duration, embed
-from .layers import SvgDeck, convert, match
-from .media import collect as collect_media, strip_video
+from . import pptrender
+from .media import collect as collect_media
 from .scene import build, default_plan, score
 
 HERE = Path(__file__).resolve().parent
@@ -49,18 +48,8 @@ def missing_fonts(names):
 
 
 def analyze(deck, work, quiet=False):
-    """PPTX + LibreOffice SVG -> analysis.json ve (kullanıcının düzenleyebileceği) plan.json"""
+    """PPTX -> analysis.json ve (kullanıcının düzenleyebileceği) plan.json. Çizim yapılmaz; PowerPoint gerekmez."""
     inv = inventory(deck)
-    src = deck
-    stripped = work / "src" / deck.name                # videolar LibreOffice için poster görseline çevrilir
-    stripped.parent.mkdir(exist_ok=True)
-    if strip_video(deck, stripped):
-        src = stripped
-        st = deck.stat()
-        os.utime(stripped, (st.st_atime, st.st_mtime))   # SVG önbelleği orijinalin tarihine göre çalışsın
-    elif stripped.exists():
-        stripped.unlink()
-    svg = SvgDeck(convert(src, work / "svg"))
     media = collect_media(deck, work)
     plan_path = work / "plan.json"
     old = {}
@@ -71,19 +60,14 @@ def analyze(deck, work, quiet=False):
             old = {}
     rows, plans = [], []
     for s in inv["slides"]:
-        layer = svg.slide(s["no"])
-        free = match(s["shapes"], layer["groups"])
         kinds = [d["kind"] for d in s["shapes"]]
-        s["unmatched"] = [d["name"] for d in s["shapes"] if "id" not in d]
-        s["unmatched_svg"] = len(free)
         s["score"] = round(score(s), 1)
         s["placeholder"] = any(PLACEHOLDER.search(d.get("text", "")) for d in s["shapes"])
         s["media"] = media.get(s["no"], [])
         plan = {**default_plan(s), **old.get(s["no"], {})}
         plans.append(plan)
         rows.append(dict(no=s["no"], shapes=len(kinds), charts=kinds.count("chart"), tables=kinds.count("table"),
-                         numbers=kinds.count("number"), score=s["score"], hidden=s["hidden"],
-                         unmatched=len(s["unmatched"]), placeholder=s["placeholder"], animate=plan["animate"],
+                         numbers=kinds.count("number"), score=s["score"], hidden=s["hidden"], placeholder=s["placeholder"], animate=plan["animate"],
                          media=", ".join(sorted({m["type"] for m in s["media"]})),
                          regions=sum(len(d["regions"]["blocks"]) for d in s["shapes"] if "regions" in d)))
     inv["missing_fonts"] = missing_fonts(inv["fonts"])
@@ -94,7 +78,7 @@ def analyze(deck, work, quiet=False):
         print(f"{'no':>3} {'şekil':>5} {'grafik':>6} {'tablo':>5} {'sayı':>4} {'puan':>5}  not")
         for r in rows:
             notes = [n for n, c in (("gizli", r["hidden"]), ("yer tutucu metin", r["placeholder"]),
-                                    (f"{r['unmatched']} şekil eşlenmedi", r["unmatched"]), ("sabit kalacak", not r["animate"]),
+                                    ("sabit kalacak", not r["animate"]),
                                     (f"hareketli medya: {r['media']}", r["media"]),
                                     (f"resim içinde {r['regions']} blok", r["regions"])) if c]
             print(f"{r['no']:>3} {r['shapes']:>5} {r['charts']:>6} {r['tables']:>5} {r['numbers']:>4} {r['score']:>5}  {', '.join(notes)}")
@@ -102,7 +86,7 @@ def analyze(deck, work, quiet=False):
         if inv["missing_fonts"]:
             print("⚠ eksik fontlar (yerine kullanılan): " + "; ".join(inv["missing_fonts"]))
         print(f"plan: {plan_path}  (animate/tempo/hold/static alanlarını düzenleyebilirsiniz)")
-    return inv, svg, plans, rows
+    return inv, plans, rows
 
 
 def pick(spec, rows, n_auto=2):
@@ -131,14 +115,22 @@ def render(jobs, work):
 
 def scenes(deck, work, spec, default, n_auto=2):
     """Çözümler, slayt seçimini uygular ve seçilen slaytların sahnelerini yazar."""
-    inv, svg, plans, rows = analyze(deck, work)
+    inv, plans, rows = analyze(deck, work)
     plan = {p["no"]: p for p in plans}
-    built = []
+    nos = []
     for no in pick(spec or default, rows, n_auto):
-        if not plan[no]["animate"]:
+        if plan[no]["animate"]:
+            nos.append(no)
+        else:
             print(f"  slayt {no}: plan.json'da animate=false, atlandı")
-            continue
-        dur, sc = build(inv["slides"][no - 1], svg.slide(no), svg, plan[no], work / "scenes" / f"{no:03d}")
+    ok, why = pptrender.available()
+    if not ok:
+        sys.exit(f"PowerPoint ile çizilemiyor ({why}); `slideready doctor` çalıştırın.")
+    print("PowerPoint katmanları:")
+    layers = pptrender.render(deck, inv, work, nos)
+    built = []
+    for no in nos:
+        dur, sc = build(inv["slides"][no - 1], layers.slide(no, plan[no].get("media", True)), layers, plan[no], work / "scenes" / f"{no:03d}")
         built.append((no, dur, sc))
     return built, rows
 
