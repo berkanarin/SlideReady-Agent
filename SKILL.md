@@ -1,6 +1,6 @@
 ---
 name: slideready
-description: Bir PowerPoint sunumunun (PPTX) her slaytını, tasarımını ve yerleşimini bozmadan hareketli videoya çevirir ve videoları aynı sunumun içine geri gömer. Sayılar sayaçla, grafikler seri seri, tablolar satır satır açılır. Kullanıcı "PPTX'i işle", "sunumu canlandır", "slaytları videoya çevir", "motion graphic yap" ya da "SlideReady" dediğinde kullan.
+description: Bir PowerPoint sunumunun (PPTX) her slaytını, tasarımını ve yerleşimini bozmadan hareketli videoya çevirir ve videoları aynı sunumun içine geri gömer. Başlıklar parçacıklardan toplanır, sayılar odometre gibi döner, slaytlar birbirine film gibi akar; görüntüyü kullanıcının PowerPoint'i çizer. Kullanıcı "PPTX'i işle", "sunumu canlandır", "slaytları videoya çevir", "motion graphic yap" ya da "SlideReady" dediğinde kullan.
 ---
 
 # SlideReady
@@ -21,7 +21,7 @@ Yalnızca **Kontrolcü** için, ortam destekliyorsa `slideready-reviewer` alt aj
 
 | # | Rol | Ne zaman | Komut / iş |
 |---|---|---|---|
-| 0 | **Kurulumcu** | Kullanıcı "kur", "repoyu anla" dediğinde ya da ilk kullanımda | `bin/slideready doctor`; eksik varsa `bash scripts/setup.sh` (Windows: `scripts\setup.ps1`), sonra tekrar `doctor` |
+| 0 | **Kurulumcu** | Kullanıcı "kur", "repoyu anla" dediğinde ya da ilk kullanımda | `bin/slideready doctor`; eksik varsa `scripts\setup.ps1` (Windows; render PowerPoint ister), sonra tekrar `doctor` |
 | 1 | **Tanımlayıcı** | PPTX geldiğinde | `bin/slideready analyze SUNUM.pptx` |
 | 2 | **Fırsat analisti** | Analizden hemen sonra | Tabloyu oku, `plan.json`'u gerekirse düzenle (aşağıda) |
 | 3–4 | **Animatör + Önizlemeci** | Plan hazır olunca | `bin/slideready preview SUNUM.pptx` (en zengin 1–2 slayt, düşük kalite) |
@@ -98,7 +98,8 @@ Bu dosyayı düzenledikten sonra komutları yeniden çalıştır; kullanıcı d�
 - Son kare orijinal slaytla aynı mı (eksik/kaymış şekil yok)?
 - Metin hiçbir anda hareketli bir görselin üstünde ya da yarı saydam durumda okunmaz kalmıyor mu?
 - Sayaçlar doğru biçimde bitiyor mu (₺12,4M, %38, 1.250)?
-- `analyze` çıktısında "eşlenmedi" ya da "eksik fontlar" uyarısı var mı? Varsa kullanıcıya söyle.
+- `preview` çıktısındaki "PowerPoint karesinden fark" 1/255'ten büyük mü? Büyükse son kare PowerPoint'ten sapmış
+  olabilir; kullanıcıya söyle.
 
 Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`). Çözülmüyorsa sorunu dürüstçe raporla.
 

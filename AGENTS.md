@@ -8,7 +8,7 @@ başlamadan önce onu oku ve adım adım uygula.
 
 | Kullanıcı | Sen |
 |---|---|
-| "Repoyu anla", "kur", "hazırla" | `bin/slideready doctor` → eksik varsa `bash scripts/setup.sh` (Windows: `scripts\setup.ps1`) → tekrar `doctor`. Sonuç: "Hazır, PPTX'ini gönderebilirsin." |
+| "Repoyu anla", "kur", "hazırla" | `bin/slideready doctor` → eksik varsa `scripts\setup.ps1` (Windows + PowerPoint gerekir) → tekrar `doctor`. Sonuç: "Hazır, PPTX'ini gönderebilirsin." |
 | "Şu PPTX'i işle" | `bin/slideready analyze X.pptx` → gerekirse `X.slideready/plan.json`'u düzenle → `bin/slideready preview X.pptx` → önizleme videolarını ve kısa özeti göster, onay iste |
 | "Tamam" / "çıktı al" | `bin/slideready export X.pptx` → `X-SlideReady.pptx` ve kısa rapor |
 | "2. slayt yavaş olsun", "logoyu oynatma" | `plan.json`'da `tempo` / `static` / `animate` → ilgili slaytı yeniden `preview --slides N` |

@@ -184,6 +184,13 @@ def apply_auto(plan, decision):
         plan["zoom"] = zoom
     else:
         plan.pop("zoom", None)
+    # açılış anı: ilk slaytın (ve kapak/bölüm/kapanışın) başlığı parçacıklardan toplanır
+    if plan.get("no") == 1 or (zoom or 1) >= 1.10:
+        plan["hero"] = "title"
+        if plan.get("no") == 1 and (zoom or 1) < 1.10 and plan["note"].startswith("otomatik:"):
+            plan["note"] += "; açılış slaytı: başlık parçacıklardan toplanır"
+    else:
+        plan.pop("hero", None)
     return plan
 
 

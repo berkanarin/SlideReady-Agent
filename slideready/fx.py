@@ -92,7 +92,7 @@ def apply(scene, st, plan, layer, groups, area):
         _shift(scene, CONTINUITY * 0.55)
     # kahraman efekt: kapak/bölüm/kapanışta başlık parçacıklardan toplanır; yoksa en büyük görsel mürekkeple açılır
     hero = None
-    if hero_zoom:
+    if hero_zoom or plan.get("hero") == "title":
         cands = [d for d in scene if d["kind"] == "title"] or \
                 sorted((d for d in scene if d["kind"] in ("text", "number")), key=lambda d: -d["w"] * d["h"])[:1]
         hero = cands[0] if cands else None
