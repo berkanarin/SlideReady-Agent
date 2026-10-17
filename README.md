@@ -1,7 +1,9 @@
 # SlideReady Agent
 
-**PowerPoint sunumunu bozmadan canlandırır.** Her slayt kendi şekilleriyle katman katman açılır: sayılar sayaçla,
-grafikler dönerek ya da büyüyerek, tablolar satır satır gelir. Videonun son karesi orijinal slaytın ta kendisidir.
+**PowerPoint sunumunu bozmadan canlandırır.** Her slayt kendi şekilleriyle katman katman açılır ve PowerPoint'in kendi
+efektleriyle yapılamayan bir hareket diliyle oynar: kamera başlığın üstünden geri çekilirken arka plan, paneller ve
+içerik farklı derinlikte kayar; öğeler bulanıktan netleşir; başlık kelime kelime, metin satır satır açılır; panellerin
+üstünden ışık geçer; sayılar sayıp yerine oturunca parlar; grafikler dönerek ya da büyüyerek, tablolar satır satır gelir. Videonun son karesi orijinal slaytın ta kendisidir.
 Çıktı yine **PPTX**'tir: her slaytta kendi videosu, otomatik başlar, döngü yoktur.
 
 ![SlideReady örnek çıktı](docs/demo.gif)
@@ -100,7 +102,8 @@ bin/slideready export   sunum.pptx --quality 720   # daha küçük dosya
 | Alan | Anlamı |
 |---|---|
 | `animate` | `false`: slayt sabit kalır, video eklenmez |
-| `tempo` | 1.0 normal, 0.8 sakin, 1.2 hızlı |
+| `style` | `sinematik` (varsayılan: kamera, derinlik, odak çekme, kelime/satır metin, ışık süzmesi), `sakin`, `enerjik` |
+| `tempo` | 1.0 normal, 0.8 sakin, 1.2 hızlı (tarzın kendi temposuyla çarpılır) |
 | `hold` | Son hareketten sonraki okuma payı (sn, en az 2) |
 | `static` | Hareket etmemesi gereken şekil adları (logo, dipnot…) |
 
@@ -111,7 +114,9 @@ bin/slideready export   sunum.pptx --quality 720   # daha küçük dosya
 - Orijinal sunumun kopyasıdır; videolar canlandırılan her slaytın en üst katmanına tam ekran yerleşir.
 - Video slayt açılınca **otomatik başlar, döngü yoktur.** Döngü isterseniz PowerPoint'te videoyu seçip
   Oynatma > "Durdurulana kadar döngü"yü işaretleyin.
-- Poster karesi videonun son karesidir: oynamadan önce, PDF'te ve baskıda tamamlanmış slayt görünür.
+- Poster karesi videonun ilk karesidir: PowerPoint oynatma başlayana kadar posteri gösterir, böylece slayt dolu görünüp
+  sonra boşalmaz. Video bitince son karede (tamamlanmış slaytta) kalır. Düzenleme görünümünde, PDF'te ve baskıda
+  açılış karesi görünür.
 - Orijinal şekiller videonun altında, düzenlenebilir hâlde kalır; konuşmacı notları korunur.
 - Slaytların eski giriş animasyonları kaldırılır (video artık onları içerir), slayt geçişleri korunur.
 

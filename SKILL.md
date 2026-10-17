@@ -46,11 +46,16 @@ anlatma, sonucu göster.
 `SUNUM.slideready/plan.json` dosyasını yazar. Plan, slayt başına şu alanlardan oluşur:
 
 ```json
-{"no": 3, "animate": true, "tempo": 1.0, "hold": 2.0, "static": [], "media": true, "note": ""}
+{"no": 3, "animate": true, "style": "sinematik", "tempo": 1.0, "hold": 2.0, "static": [], "media": true, "note": ""}
 ```
 
 - `animate`: `false` ise slayt sabit kalır, video eklenmez. Kapak, ajanda, kaynakça, hukuki metin, tamamen
   fotoğraftan oluşan ya da yer tutucu metin içeren slaytlar için kullan.
+- `style`: hareket tarzı. `sinematik` (varsayılan: kamera başlığın üstünden geri çekilir, katmanlar farklı derinlikte
+  kayar, öğeler bulanıktan netleşir, başlık kelime kelime / metin satır satır açılır, panellerden ışık geçer, sayaç
+  bitince parlar), `sakin` (kamera yok, yumuşak netleşme ve satır satır metin; resmî sunumlar için), `enerjik` (daha
+  yakın kamera, yaylanan ikonlar ve sayılar, hızlı tempo; tanıtım ve lansman için). Kullanıcı "daha sade" derse
+  `sakin`, "daha hareketli" derse `enerjik`. Hepsi PowerPoint'in çizdiği aynı son kareye varır.
 - `tempo`: 1.0 normal; 0.8 daha sakin, 1.2 daha hızlı. Kullanıcı "yavaş/hızlı" derse bunu değiştir.
 - `hold`: son hareketten sonraki durağan okuma payı (sn). Varsayılan metin miktarına göre 2–5 sn arasıdır;
   2'nin altına indirme.
@@ -83,7 +88,7 @@ Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`).
 
 - `bin/slideready export SUNUM.pptx` (varsayılan 1080p 60 fps; büyük sunumlarda `--quality 720` dosyayı küçültür).
 - Çıktı `SUNUM-SlideReady.pptx`: orijinal sunumun kopyası. Her canlandırılan slaytın en üst katmanında kendi
-  videosu vardır; otomatik başlar, döngü yoktur, poster karesi tamamlanmış slayttır. Orijinal şekiller altta,
+  videosu vardır; otomatik başlar, döngü yoktur, poster açılış karesidir (dolu-sonra-boş sıçraması olmasın diye); video bitince tamamlanmış slaytta kalır. Orijinal şekiller altta,
   düzenlenebilir hâlde kalır. Kullanıcı döngü isterse PowerPoint'te Oynatma > "Durdurulana kadar döngü"yü açar.
 - Süre: kabaca slayt başına 15–25 sn render. Uzun işlerde başlamadan önce tahmini söyle.
 

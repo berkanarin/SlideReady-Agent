@@ -21,7 +21,7 @@ from pathlib import Path
 
 FRAMES = 16          # sayaç kare sayısı (son kare şeklin kendisi)
 ALPHA_MIN = 1 / 255  # bu kadar saydam pikseller kırpmada yok sayılır
-VERSION = 1          # katman biçimi değişirse önbelleği geçersiz kılar
+VERSION = 2         # katman biçimi değişirse önbelleği geçersiz kılar
 
 
 def available(close=False):
@@ -153,6 +153,33 @@ def _leaves(slide):
     return out
 
 
+PT = 12700 / 360    # 1 punto (COM) -> svg birimi (1/100 mm)
+
+
+def _text_bounds(sh):
+    """Metin şeklinin satır ve kelime kutuları (svg birimi, [sol, üst, sağ, alt]) ve şeklin dolgusuz/çizgisiz olup
+    olmadığı. Sahne metni satır satır ya da kelime kelime açar; dolgulu kutuları bölmez. Döndürülmüş metinde None."""
+    try:
+        if not sh.HasTextFrame or not sh.TextFrame.HasText or sh.Rotation or sh.TextFrame.Orientation != 1:
+            return None
+        tr = sh.TextFrame.TextRange
+
+        def boxes(get, limit):
+            out = []
+            for i in range(1, limit):
+                r = get(i, 1)
+                if r is None or r.Length == 0:
+                    break
+                if r.Text.strip() and r.BoundWidth > 0:
+                    out.append([round(v * PT, 1) for v in (r.BoundLeft, r.BoundTop, r.BoundLeft + r.BoundWidth,
+                                                           r.BoundTop + r.BoundHeight)])
+            return out
+        plain = not sh.Fill.Visible and not sh.Line.Visible
+        return dict(plain=bool(plain), lines=boxes(tr.Lines, 80), words=boxes(tr.Words, 200))
+    except Exception:
+        return None
+
+
 def _export_slide(slide, d, shapes, bgmedia, W, H):
     """Ham kareleri d/raw altına yazar; bulunamayan şekil kimliklerini döndürür.
 
@@ -163,7 +190,7 @@ def _export_slide(slide, d, shapes, bgmedia, W, H):
     ex = lambda name: slide.Export(str(raw / name), "PNG", W, H)  # noqa: E731
     leaves = _leaves(slide)
     ex("full.png")
-    items, missing = [], []
+    items, missing, texts = [], [], {}
     for s in shapes:
         sh = leaves.get(s["sid"])
         if sh is None:
@@ -171,6 +198,8 @@ def _export_slide(slide, d, shapes, bgmedia, W, H):
             continue
         if sh.Visible:                                   # PowerPoint'te gizli şeklin katmanı yok
             items.append((s, sh))
+            if s["kind"] in ("text", "title"):
+                texts[str(s["sid"])] = _text_bounds(sh)
         sh.Visible = 0
     ex("bg.png")
     if bgmedia:
@@ -204,7 +233,7 @@ def _export_slide(slide, d, shapes, bgmedia, W, H):
                 if hit is not None:
                     hit.Text = s["val"]
             sh.Visible = 0
-    return missing
+    return missing, texts
 
 
 def _stamp(deck, width, shapes, bgmedia):
@@ -221,7 +250,7 @@ def _jobs(slide):
     """Envanter şekillerinden dışa aktarım işi: kimlik, sayaç kareleri, medya kutusu."""
     out = []
     for d in slide["shapes"]:
-        j = dict(sid=d["sid"], id=d["id"], box=[d["x"], d["y"], d["w"], d["h"]], media=d["kind"] == "media")
+        j = dict(sid=d["sid"], id=d["id"], kind=d["kind"], box=[d["x"], d["y"], d["w"], d["h"]], media=d["kind"] == "media")
         if d["kind"] == "number":
             j.update(val=d["val"], frames=count_frames(d["val"]))
         out.append(j)
@@ -253,7 +282,7 @@ def render(deck, inv, work, nos, width=1920, log=print):
                 t0 = time.time()
                 for old in d.glob("*.png"):
                     old.unlink()
-                missing = _export_slide(pres.Slides(no), d, shapes, bgmedia, W, H)
+                missing, texts = _export_slide(pres.Slides(no), d, shapes, bgmedia, W, H)
                 t1 = time.time()
                 raw = d / "raw"
                 layers = {}
@@ -277,6 +306,8 @@ def render(deck, inv, work, nos, width=1920, log=print):
                             if fbox:
                                 L["frames"].append(dict(file=f"{s['sid']}-n{i}.png",
                                                         box=_crop_save(fim, fbox, d / f"{s['sid']}-n{i}.png")))
+                    if texts.get(str(s["sid"])):
+                        L["text"] = texts[str(s["sid"])]
                     layers[str(s["sid"])] = L
                 for name in ("full.png", "bg.png", "bgm.png"):
                     if (raw / name).exists():
@@ -335,7 +366,7 @@ class PptDeck:
         groups = []
         for s in self.inv["slides"][no - 1]["shapes"]:
             L = info["layers"].get(str(s["sid"]))
-            out.append(f'<g id="{s["id"]}"><rect class="BoundingBox" stroke="none" fill="none" x="{s["x"]:.0f}" '
+            out.append(f'<g id="{s["id"]}" data-k="{s["kind"]}"><rect class="BoundingBox" stroke="none" fill="none" x="{s["x"]:.0f}" '
                        f'y="{s["y"]:.0f}" width="{s["w"]:.0f}" height="{s["h"]:.0f}"/>')
             if L:
                 for i, f in enumerate(L.get("frames") or []):        # sayaç kareleri: sahne birini gösterir
@@ -343,5 +374,11 @@ class PptDeck:
                 n = len(L.get("frames") or [])
                 out.append(self._image(d, L, f' data-n="{n}"' if n else ' data-media=""' if s["kind"] == "media" else ""))
             out.append("</g>")
-            groups.append(dict(id=s["id"], x=s["x"], y=s["y"], w=s["w"], h=s["h"]))
+            g = dict(id=s["id"], x=s["x"], y=s["y"], w=s["w"], h=s["h"])
+            if L:                                       # katman kutusu ve metin satırları (svg birimi)
+                x0, y0, x1, y1 = L["box"]
+                g["box"] = [x0 * self.k, y0 * self.k, x1 * self.k, y1 * self.k]
+                if L.get("text"):
+                    g["text"] = L["text"]
+            groups.append(g)
         return dict(body="\n".join(out), uses=["srbg"], groups=groups)

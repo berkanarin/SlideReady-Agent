@@ -113,6 +113,30 @@ class CounterFrames(unittest.TestCase):
         self.assertEqual(number_format("12.500.000")(0.5), "6.250.000")
 
 
+class Motion(unittest.TestCase):
+    """Hareket tarzları ve metin bantları (saf Python)."""
+
+    def test_styles(self):
+        from slideready.scene import DEFAULT_STYLE, STYLES, default_plan, style_of
+        self.assertEqual(default_plan(dict(no=1, hidden=False, shapes=[]))["style"], DEFAULT_STYLE)
+        self.assertEqual(style_of(dict(style="yok", tempo=1.0))["name"], DEFAULT_STYLE)
+        st = style_of(dict(style="enerjik", tempo=0.8))
+        self.assertAlmostEqual(st["tempo"], STYLES["enerjik"]["tempo"] * 0.8)
+
+    def test_text_parts_tile_the_layer(self):
+        """Bantlar katman kutusunu boşluksuz ve örtüşmeden kaplar: hepsi açılınca katmanın tamamı görünür."""
+        from slideready.scene import text_parts
+        g = dict(box=[0, 0, 1000, 300], text=dict(plain=True, lines=[[50, 20, 900, 140], [50, 150, 600, 280]],
+                 words=[[50, 20, 400, 140], [400, 20, 900, 140], [50, 150, 300, 280], [300, 150, 600, 280]]))
+        for words, n in ((True, 4), (False, 2)):
+            parts = text_parts(g, words)
+            self.assertEqual(len(parts), n)
+            self.assertAlmostEqual(sum(p[2] * p[3] for p in parts), 1000 * 300)
+            self.assertEqual([p[4] for p in parts], sorted(p[4] for p in parts))
+        g["text"]["plain"] = False                          # dolgulu kutu bölünmez
+        self.assertIsNone(text_parts(g, True))
+
+
 class ImageRegions(unittest.TestCase):
     """Metin/şekil resim olarak konmuşsa resim okuma sırasıyla bloklara ayrılır; fotoğraf bölünmez."""
 

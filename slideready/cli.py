@@ -200,7 +200,7 @@ def cmd_export(a):
     skipped = [r["no"] for r in rows if r["no"] not in dict(done)]
     if skipped:
         print(f"  video eklenmeyen slaytlar: {', '.join(map(str, skipped))}")
-    print("  Videolar otomatik başlar, döngü yoktur; poster karesi tamamlanmış slayttır.")
+    print("  Videolar otomatik başlar, döngü yoktur; poster açılış karesidir, video bitince tamamlanmış slaytta kalır.")
 
 
 def main(argv=None):
