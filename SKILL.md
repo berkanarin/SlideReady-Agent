@@ -6,7 +6,8 @@ description: Bir PowerPoint sunumunun (PPTX) her slaytını, tasarımını ve ye
 # SlideReady
 
 Kullanıcının sunumunu **yeniden tasarlamadan** canlandırırsın. Her slaytın kendi şekilleri katman katman açılır,
-videonun son karesi orijinal slaytın ta kendisidir. Çıktı yine bir PPTX'tir: her slaytta kendi videosu, otomatik
+videonun son karesi orijinal slaytla aynı olmak üzere kurulur. Bu bir hedeftir, kanıt değildir: son kare LibreOffice
+render'ından gelir ve gerçek bir referansla karşılaştırılmadan "aynı" diye raporlanmaz (aşağıda 5). Çıktı yine bir PPTX'tir: her slaytta kendi videosu, otomatik
 başlar, **döngü yoktur**.
 
 Bütün ağır iş `bin/slideready` aracındadır (Windows'ta `bin\slideready.cmd`). Yollar bu SKILL.md'nin
@@ -52,7 +53,11 @@ anlatma, sonucu göster.
 - `tempo`: 1.0 normal; 0.8 daha sakin, 1.2 daha hızlı. Kullanıcı "yavaş/hızlı" derse bunu değiştir.
 - `hold`: son hareketten sonraki durağan okuma payı (sn). Varsayılan metin miktarına göre 2–5 sn arasıdır;
   2'nin altına indirme.
-- `static`: hareket etmemesi gereken şekil adları (ör. logo, dipnot). Adlar `analysis.json`'dadır.
+- `static`: hareket etmemesi gereken şekil adları (ör. logo, dipnot). Adlar `analysis.json`'dadır. `Picture 3`,
+  `Resim 5` gibi otomatik adlardan işlev çıkarma: nesneyi eklemeden önce kontak sayfasında ya da kaynak nesne
+  verisinde (boyut, konum, saydamlık, kırpma) ne olduğuna bak. Ekran görselinin altındaki yarı saydam bir PNG
+  gölgedir, logo ya da "marka görseli" değildir; raporda da öyle adlandır. `static` yalnızca hareketi durdurur,
+  dönüşümde kaybolan görünümü (alfa, kırpma, efekt) geri getirmez.
 - `note`: kararının kısa gerekçesi (kullanıcıya rapor ederken kullanırsın).
 
 Bu dosyayı düzenledikten sonra komutları yeniden çalıştır; kullanıcı düzenlemeleri korunur.
@@ -67,12 +72,30 @@ Bu dosyayı düzenledikten sonra komutları yeniden çalıştır; kullanıcı d�
 
 ## 5. Kontrol listesi (kontak sayfası: %25, %50, %75 ve son kare)
 
-- Son kare orijinal slaytla aynı mı (eksik/kaymış şekil yok)?
+**Referans.** Son kareyi gerçek bir referansla karşılaştır. PowerPoint kuruluysa (Windows/Mac) slaytı PowerPoint'in
+kendisine dışa aktar ve onu referans al; Windows'ta örneğin PowerShell:
+`$pp = New-Object -ComObject PowerPoint.Application; $p = $pp.Presentations.Open("C:\tam\yol\SUNUM.pptx", $true, $false, $false); $p.Slides(3).Export("C:\tam\yol\ref-003.png", "PNG", 1920, 1080); $p.Close()`.
+PowerPoint yoksa karşılaştırma yalnızca LibreOffice render'ına dayanır; bunu raporda açıkça yaz, çünkü LibreOffice'in
+kendi hatası o durumda görünmez.
+
+- Son kare referansla aynı mı (eksik/kaymış şekil yok)?
+- **Saydamlık ve efektler:** gölgeler, saydam PNG'ler, yumuşak kenarlar, kırpılmış görseller, parlama/yansıma gibi
+  efektler referanstakiyle aynı genişlikte, koyulukta ve konumda mı? Daralmış, silikleşmiş, sertleşmiş ya da kaybolmuş
+  bir gölge veya efekt açık bir sadakat sorunudur.
+- Aynı görsel birden çok slaytta kullanılıyorsa (SVG'de paylaşılan bitmap ve `<use>` referansı) her slaytı ayrı
+  kontrol et; ilk slaytın doğru olması diğerlerini kanıtlamaz.
 - Metin hiçbir anda hareketli bir görselin üstünde ya da yarı saydam durumda okunmaz kalmıyor mu?
 - Sayaçlar doğru biçimde bitiyor mu (₺12,4M, %38, 1.250)?
 - `analyze` çıktısında "eşlenmedi" ya da "eksik fontlar" uyarısı var mı? Varsa kullanıcıya söyle.
 
-Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`). Çözülmüyorsa sorunu dürüstçe raporla.
+**Eşleme başarısı görsel sadakat değildir.** "Eşlenmedi" uyarısının olmaması (`unmatched=0`) yalnızca her şeklin bir
+katmana bağlandığını gösterir; katmanın içeriği LibreOffice'ten geldiği için görünüm orada zaten bozulmuş olabilir.
+Raporda ikisini ayrı yaz: "eşleme: tam" ve "görsel sadakat: referansla doğrulandı / yalnızca LibreOffice ile
+karşılaştırıldı / sorun var".
+
+Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`). Plan ayarı görünümü düzeltmiyorsa (ör.
+gölge son karede de silik) sorunu çözülmüş gibi sunma; hangi slaytta, hangi nesnede ve referansa göre ne kadar fark
+olduğunu açıkça raporla.
 
 ## 6. Çıktı
 
@@ -87,7 +110,9 @@ Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`).
 1. Çıktı dosyasının yolu ve boyutu.
 2. Canlandırılan ve sabit bırakılan slaytlar (gerekçeyle).
 3. Eksik fontlar ve eşlenemeyen şekiller, varsa.
-4. Doğrulayamadığın şeyler: gerçek PowerPoint'te oynatmayı test edemediysen bunu açıkça yaz.
+4. Görsel sadakat: son karenin neyle karşılaştırıldığı (PowerPoint referansı ya da yalnızca LibreOffice) ve kalan
+   farklar (gölge, saydamlık, efekt), eşleme sonucundan ayrı.
+5. Doğrulayamadığın şeyler: gerçek PowerPoint'te oynatmayı test edemediysen bunu açıkça yaz.
 
 ## Bilinen sınırlar
 
@@ -96,5 +121,8 @@ Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`).
 - Font slaytta var ama sistemde yoksa LibreOffice benzeriyle değiştirir; görünüm değişebilir. Kullanıcıdan fontu
   kurmasını isteyebilirsin.
 - SmartArt ve gömülü Excel nesneleri tek parça olarak açılır.
+- Görsellerin ek opaklığı (`a:alphaModFix`) dönüşümden önce görselin alfa kanalına gömülür, çünkü LibreOffice bu
+  opaklığı alfaya çarpmak yerine alfadan çıkarır ve yumuşak gölgeleri daraltır. PowerPoint'in gölge, yumuşak kenar,
+  parlama ve yansıma efektleri ise LibreOffice'in çizdiği hâliyle gelir; bunları referansla kontrol et.
 - Otomatik başlatma PowerPoint 2016+ (Windows/Mac) içindir. Google Slides ve Keynote gömülü videoyu otomatik
   başlatmaz.

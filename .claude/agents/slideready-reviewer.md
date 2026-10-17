@@ -12,5 +12,10 @@ Sen SlideReady'nin Kontrolcüsüsün. Sana bir çalışma klasörü (`SUNUM.slid
    - Son kare tamamlanmış ve düzgün mü; eksik ya da kaymış şekil var mı?
    - Metin herhangi bir karede hareketli bir görselin üstünde ya da okunmaz durumda mı?
    - Sayaçlar doğru değerde ve biçimde bitiyor mu?
+   - Gölgeler, saydam PNG'ler, yumuşak kenarlar, kırpılmış görseller ve efektler son karede daralmış, silikleşmiş
+     ya da kaybolmuş mu? Klasörde PowerPoint referansı (`ref-NNN.png`) varsa son kareyi onunla karşılaştır; yoksa
+     karşılaştırmanın yalnızca LibreOffice'e dayandığını yaz. `unmatched=0` görsel sadakat kanıtı değildir.
+   - Şekil adından (`Picture 3` gibi) işlev çıkarma; ne olduğunu kontak sayfasında gör.
 4. En fazla 8 satırlık bir sonuç döndür: slayt no → sorun → önerilen `plan.json` değişikliği
-   (`animate`, `tempo`, `hold`, `static`). Sorun yoksa "Sorun yok" yaz. Dosya düzenleme.
+   (`animate`, `tempo`, `hold`, `static`). Plan ayarı görünümü düzeltmiyorsa öneri yerine "sadakat sorunu" yaz.
+   Sorun yoksa "Sorun yok" yaz. Dosya düzenleme.
