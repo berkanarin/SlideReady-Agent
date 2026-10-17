@@ -3,11 +3,15 @@
 LibreOffice her şekli kendi <g id="idN"> grubunda, slayttaki yerinde yazar. Bu modül bir slaytın gövdesini,
 arka planını ve şekil gruplarını (konum kutusuyla) ayıklar; kimliksiz gruplara (resim, tablo) kimlik verir.
 """
+import io
 import re
 import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+
+from PIL import Image
+from pptx import Presentation
 
 G = re.compile(r"<g\b[^>]*?(/?)>|</g>")
 
@@ -24,6 +28,43 @@ def soffice_bin():
     return None
 
 
+A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+R_EMBED = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+
+
+def bake_alpha(deck, dst):
+    """Görsellerin ek opaklığını (a:alphaModFix) kendi alfa kanalına çarparak gömer; değiştiyse dst'ye yazar.
+
+    LibreOffice bu opaklığı alfaya çarpmak yerine alfadan çıkarır (166 alfa, %70 -> 89; doğrusu 116), düşük alfalı
+    kenarlar sıfıra iner: yumuşak gölgeler daralır ve silikleşir. Kırpma (a:srcRect) doğru işlendiği için
+    dokunulmaz. Aynı görseli kullanan her nesneye kendi kopyası verilir. Düzeltilen nesne sayısını döndürür.
+    """
+    prs = Presentation(str(deck))
+    parts = [s.part for s in prs.slides] + [l.part for l in prs.slide_layouts] + [m.part for m in prs.slide_masters]
+    fixed = 0
+    for part in parts:
+        for fix in list(part._element.iter(A + "alphaModFix")):
+            blip = fix.getparent()
+            rid = blip.get(R_EMBED)
+            try:
+                im = Image.open(io.BytesIO(part.related_part(rid).blob)).convert("RGBA")
+            except Exception:  # vektör ya da açılamayan görsel: LibreOffice'e bırak
+                continue
+            amt = max(0, min(100000, int(fix.get("amt", "100000"))))
+            a = im.getchannel("A").point(lambda v: (v * amt + 50000) // 100000)
+            im.putalpha(a)
+            buf = io.BytesIO()
+            im.save(buf, "PNG")
+            buf.seek(0)
+            _, new_rid = part.get_or_add_image_part(buf)
+            blip.set(R_EMBED, new_rid)
+            blip.remove(fix)
+            fixed += 1
+    if fixed:
+        prs.save(str(dst))
+    return fixed
+
+
 def convert(deck, outdir, fmt="svg:impress_svg_Export"):
     """PPTX'i SVG'ye (veya PDF'e) çevirir. Ayrı profil kullanır; açık bir LibreOffice ile çakışmaz."""
     outdir.mkdir(parents=True, exist_ok=True)
@@ -31,9 +72,11 @@ def convert(deck, outdir, fmt="svg:impress_svg_Export"):
     out = outdir / (Path(deck).stem + "." + ext)
     if out.exists() and out.stat().st_mtime >= Path(deck).stat().st_mtime:
         return out
-    with tempfile.TemporaryDirectory() as prof:
+    with tempfile.TemporaryDirectory() as prof, tempfile.TemporaryDirectory() as tmp:
+        baked = Path(tmp) / Path(deck).name
+        src = baked if bake_alpha(deck, baked) else Path(deck)
         subprocess.run([soffice_bin(), f"-env:UserInstallation={Path(prof).as_uri()}", "--headless",
-                        "--convert-to", fmt, "--outdir", str(outdir), str(deck)],
+                        "--convert-to", fmt, "--outdir", str(outdir), str(src)],
                        check=True, capture_output=True, timeout=600)
     if not out.exists():
         raise RuntimeError(f"LibreOffice çıktı üretmedi: {out}")
