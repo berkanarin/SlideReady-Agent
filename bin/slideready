@@ -1,0 +1,4 @@
+#!/usr/bin/env sh
+# SlideReady komut satırı: bin/slideready doctor | analyze | preview | export
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+PYTHONPATH="$ROOT${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m slideready "$@"

@@ -1,0 +1,99 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0}
+html,body{width:100vw;height:100vh;overflow:hidden;background:#000}
+body>svg{display:block;width:100vw;height:100vh}
+svg g[data-a]{transform-box:fill-box;transform-origin:center;font-variant-numeric:tabular-nums}
+svg g[data-a="line"]{transform-origin:left top}
+</style></head><body>
+/*SVG_DEFS*/
+<defs id="sr-clips"></defs>
+<g id="sr-bg">/*BG*/</g>
+/*SLIDE*/
+</svg>
+<script>
+// SlideReady sahnesi: render(t) saf fonksiyondur, aynı t her zaman aynı kareyi verir.
+const SCENE=/*SCENE*/, DUR=/*DUR*/;
+const K=/*VBW*/ / 1920;                   // 1920 genişlikte 1 piksel = K svg birimi
+const svg=document.querySelector('body>svg'), NS='http://www.w3.org/2000/svg';
+svg.querySelectorAll('[visibility="hidden"]').forEach(n=>{ if(n.querySelector('[id^="container-"]')) n.removeAttribute('visibility'); });
+
+const clamp=x=>Math.max(0,Math.min(1,x));
+const out3=x=>1-Math.pow(1-clamp(x),3);
+const back=x=>{x=clamp(x);const c=1.7;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2);};
+
+// "12,4" "1.250" "3.250,75" gibi sayıları ayrıştırır; biçimi koruyarak k oranında yeniden yazar
+function numFmt(m){
+  const seps=m.match(/[.,]/g)||[]; let ts='',ds='';
+  if(seps.length>1){ ts=seps[0]; if(seps[seps.length-1]!==ts) ds=seps[seps.length-1]; }
+  else if(seps.length===1){ const tail=m.split(seps[0])[1]; if(tail.length===3 && !/^0/.test(m)) ts=seps[0]; else ds=seps[0]; }
+  const [ip,fp='']=ds?m.split(ds):[m,''];
+  const v=parseFloat(ip.split(ts||'\u0000').join('')+'.'+(fp||'0')), dec=fp.length;
+  return k=>{ let s=(v*k).toFixed(dec); let [a,b]=s.split('.');
+    if(ts) a=a.replace(/\B(?=(\d{3})+(?!\d))/g,ts);
+    return b?a+ds+b:a; };
+}
+const NUMRE=/\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?/;
+function counters(root){
+  return [...root.querySelectorAll('tspan')].filter(t=>!t.children.length && NUMRE.test(t.textContent)).map(t=>{
+    const o=t.textContent, m=o.match(NUMRE)[0], f=numFmt(m);
+    const pos=t.closest('[y]'); return {t,o,m,f,y:pos?parseFloat(pos.getAttribute('y')):0};
+  });
+}
+function setCount(c,k){ c.t.textContent=c.o.replace(c.m,c.f(k)); }
+function wedge(cx,cy,r,a){                 // saat 12'den saat yönünde dilim
+  if(a>=0.9999) return `M${cx-r},${cy-r}h${2*r}v${2*r}h${-2*r}z`;
+  const e=-Math.PI/2+a*2*Math.PI, l=a>0.5?1:0;
+  return `M${cx},${cy}L${cx},${cy-r}A${r},${r} 0 ${l} 1 ${cx+r*Math.cos(e)},${cy+r*Math.sin(e)}Z`;
+}
+
+const items=SCENE.map((s,i)=>{
+  const g=document.getElementById(s.id); if(!g) return null;
+  g.setAttribute('data-a',s.kind);
+  const it={s,g};
+  if(s.kind==='number') it.nums=counters(g);
+  if(s.kind==='chart'||s.kind==='table'){
+    const cp=document.createElementNS(NS,'clipPath'); cp.id='src'+i; cp.setAttribute('clipPathUnits','userSpaceOnUse');
+    it.clip=document.createElementNS(NS,'path'); cp.appendChild(it.clip);
+    document.getElementById('sr-clips').appendChild(cp); g.setAttribute('clip-path',`url(#src${i})`);
+  }
+  if(s.kind==='table') it.nums=counters(g).filter(c=>!/[^\d.,%₺$€+\-\s]/.test(c.o));
+  return it;
+}).filter(Boolean);
+
+function render(t){
+  document.getElementById('sr-bg').style.cssText=`transform-box:view-box;transform-origin:center;transform:scale(${1.03-0.03*out3(t/DUR)})`;
+  for(const it of items){
+    const {s,g}=it, u=t-s.t0; let o=1, tf='';
+    switch(s.kind){
+      case 'title':  o=out3(u/0.5); tf=`translateY(${(1-out3(u/0.8))*28*K}px)`; break;
+      case 'panel':  o=out3(u/0.6); tf=`scale(${0.965+0.035*out3(u/0.7)})`; break;
+      case 'line':   { const p=out3(u/0.7); o=u>0?1:0; tf=s.w>=s.h?`scaleX(${p})`:`scaleY(${p})`; break; }
+      case 'deco':   o=out3(u/0.25); tf=`scale(${Math.max(0,back(u/0.55))})`; break;
+      case 'picture':o=out3(u/0.5); tf=`translateY(${(1-out3(u/0.6))*18*K}px) scale(${0.94+0.06*out3(u/0.6)})`; break;
+      case 'text':   o=out3(u/0.6); tf=`translateY(${(1-out3(u/0.7))*14*K}px)`; break;
+      case 'number': {
+        o=out3(u/0.3); tf=`scale(${0.88+0.12*back(u/0.5)})`;
+        const k=out3(u/1.4); it.nums.forEach(c=>setCount(c,k)); break;
+      }
+      case 'chart': {
+        const p=out3(u/1.4), {x,y,w,h}=s, pad=300;
+        it.clip.setAttribute('d', s.chart==='pie' ? wedge(x+w/2,y+h/2,Math.max(w,h),u<=0?0:p)
+          : s.chart==='column' ? `M${x-pad},${y+h+pad}h${w+2*pad}v${-(h+2*pad)*p}h${-(w+2*pad)}z`
+          : `M${x-pad},${y-pad}h${(w+2*pad)*p}v${h+2*pad}h${-(w+2*pad)*p}z`);
+        o=u>0?1:0; break;
+      }
+      case 'table': {                        // satır satır yukarıdan aşağı; sayılar satırları açılınca sayar
+        const T=Math.min(2.2,0.3*(s.rows||5)), p=clamp(u/T), front=s.y+(s.h+100)*p;
+        it.clip.setAttribute('d',`M${s.x-100},${s.y-100}h${s.w+200}v${front-s.y+100}h${-(s.w+200)}z`);
+        it.nums.forEach(c=>{ const lt=t-(s.t0+T*clamp((c.y-s.y)/s.h)); setCount(c,out3(lt/0.8)); });
+        o=u>0?1:0; break;
+      }
+    }
+    g.style.opacity=u<=0?0:o; g.style.transform=tf;
+  }
+}
+render(0);
+</script>
+</body></html>
