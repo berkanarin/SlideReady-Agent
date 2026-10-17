@@ -36,6 +36,8 @@ Değişiklik isterseniz tek cümle yeterli: "3. slayt daha yavaş olsun", "logoy
 | İkon, ok, dekor | Küçük bir sıçramayla gelir |
 | Metin | Hafifçe yükselerek belirir |
 | Gruplar | İçindeki şekiller okuma sırasıyla gelir |
+| GIF ve video (slaytta, düzende ya da asıl slaytta) | Kendi kareleriyle oynar; arka plan videosu verilerle tek bütündür |
+| Resim olarak konmuş metin/şekil (ekran görüntüsü) | Düz zeminliyse blok blok, okuma sırasıyla açılır |
 
 Okunabilirlik kuralları: metin hiçbir zaman hareketli bir görselin üstünden geçmez, her slaytın sonunda en az
 2 saniye durağan okuma payı vardır (metin arttıkça uzar), arka plan yalnızca çok hafif yakınlaşır.

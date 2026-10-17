@@ -44,7 +44,7 @@ anlatma, sonucu göster.
 `SUNUM.slideready/plan.json` dosyasını yazar. Plan, slayt başına şu alanlardan oluşur:
 
 ```json
-{"no": 3, "animate": true, "tempo": 1.0, "hold": 2.0, "static": [], "note": ""}
+{"no": 3, "animate": true, "tempo": 1.0, "hold": 2.0, "static": [], "media": true, "note": ""}
 ```
 
 - `animate`: `false` ise slayt sabit kalır, video eklenmez. Kapak, ajanda, kaynakça, hukuki metin, tamamen
@@ -53,6 +53,9 @@ anlatma, sonucu göster.
 - `hold`: son hareketten sonraki durağan okuma payı (sn). Varsayılan metin miktarına göre 2–5 sn arasıdır;
   2'nin altına indirme.
 - `static`: hareket etmemesi gereken şekil adları (ör. logo, dipnot). Adlar `analysis.json`'dadır.
+- `media`: `true` ise slayttaki, düzendeki ya da asıl slayttaki animasyonlu GIF'ler ve videolar videonun içinde
+  oynar (arka plan videosu verilerle tek bütün olur; slayt süresi videonun sonuna kadar uzar, en fazla 60 sn; videonun
+  sesi klibe eklenir). `false` ise ilk kareleri durağan kalır.
 - `note`: kararının kısa gerekçesi (kullanıcıya rapor ederken kullanırsın).
 
 Bu dosyayı düzenledikten sonra komutları yeniden çalıştır; kullanıcı düzenlemeleri korunur.
@@ -96,5 +99,9 @@ Bir sorun görürsen önce `plan.json` ile çöz (`static`, `tempo`, `animate`).
 - Font slaytta var ama sistemde yoksa LibreOffice benzeriyle değiştirir; görünüm değişebilir. Kullanıcıdan fontu
   kurmasını isteyebilirsin.
 - SmartArt ve gömülü Excel nesneleri tek parça olarak açılır.
+- Metin, şekil ya da grafik slayta **resim olarak** konmuşsa (ekran görüntüsü vb.) ve resmin zemini düz renkli ya da
+  saydamsa, resim okuma sırasıyla blok blok açılır (`analyze` notu: "resim içinde N blok"). Resimdeki sayılar
+  sayaçla saymaz (OCR yok); fotoğraflar ve üstünde başka şekil olan resimler tek parça açılır.
+- `analyze` notunda "hareketli medya" görürsen önizlemede GIF/videonun oynadığını kontrol et.
 - Otomatik başlatma PowerPoint 2016+ (Windows/Mac) içindir. Google Slides ve Keynote gömülü videoyu otomatik
   başlatmaz.
