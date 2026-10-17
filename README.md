@@ -8,7 +8,9 @@ bulanıklığıyla. Görüntüyü sizin PowerPoint'iniz çizer: videonun son kar
 
 ![SlideReady örnek çıktı](docs/demo.gif)
 
-*Yukarıdaki animasyon, repodaki kurgusal `examples/demo.pptx` dosyasından hiçbir elle ayar yapılmadan üretildi.*
+*Yukarıdaki animasyon, repodaki kurgusal `examples/demo.pptx` dosyasının dört slaytının art arda oynatılmasıdır;
+hiçbir elle ayar yapılmadan üretildi (açılışta parçacıklarla toplanan başlık, odometre sayaçlar, slaytlar arası
+kesintisiz geçiş).*
 
 Claude (Claude Code skill'i) ve Codex (AGENTS.md) ile ajan olarak çalışır; tek başına komut satırı aracı olarak da
 kullanılabilir.

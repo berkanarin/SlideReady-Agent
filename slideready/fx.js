@@ -189,7 +189,7 @@ function odometer(it){
       c.ims.forEach((im,k)=>{ const on=k===i||(k===j&&f>0.001);
         im.setAttribute('display',on?'inline':'none');
         if(on) im.style.transform=`translateY(${(k===i?-f:1-f)*H}px)`; });
-      c.blur(Math.min(H*.3,v*H*.012));
+      c.blur(Math.min(H*.1,v*H*.004));   // çıktıdaki hareket bulanıklığı bunun üstüne eklenir
     }
   };
 }
