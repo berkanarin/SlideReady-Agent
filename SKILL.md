@@ -31,6 +31,12 @@ Yalnızca **Kontrolcü** için, ortam destekliyorsa `slideready-reviewer` alt aj
 Kullanıcının gözünden akış üç adımdır: **kur → PPTX'i ver ve önizlemeyi gör → çıktıyı al.** Ara adımları
 anlatma, sonucu göster.
 
+**Başta soru sorma.** Tarzı, tempoyu, neyin öne çıkacağını sen seçersin: `analyze` her slayt için bir karar verir
+(`plan.json`'da `style: "auto"`, seçilen tarz `chosen`, gerekçe `note`). Analiz et, karar ver, önizlemeyi üret ve
+kullanıcıya tek kısa paragrafta hangi slayta ne seçtiğini ve neden seçtiğini söyle. Kullanıcı bir cümleyle değiştirir
+("3. slayt daha sade olsun" → `style: "sakin"`). Yalnızca sonucu gerçekten değiştiren bir belirsizlikte sor (ör. yer
+tutucu metin kalmış bir slayt).
+
 ## 0. Kurulum
 
 - `bin/slideready doctor` her satırı ✓/✗ ile verir ve eksik için kurulum komutunu yazar.
@@ -46,12 +52,17 @@ anlatma, sonucu göster.
 `SUNUM.slideready/plan.json` dosyasını yazar. Plan, slayt başına şu alanlardan oluşur:
 
 ```json
-{"no": 3, "animate": true, "style": "sinematik", "tempo": 1.0, "hold": 2.0, "static": [], "media": true, "note": ""}
+{"no": 3, "animate": true, "style": "auto", "chosen": "sinematik", "zoom": 1.04, "lead": "number", "tempo": 1.0, "hold": 2.0, "static": [], "media": true, "note": ""}
 ```
 
 - `animate`: `false` ise slayt sabit kalır, video eklenmez. Kapak, ajanda, kaynakça, hukuki metin, tamamen
   fotoğraftan oluşan ya da yer tutucu metin içeren slaytlar için kullan.
-- `style`: hareket tarzı. `sinematik` (varsayılan: kamera başlığın üstünden geri çekilir, katmanlar farklı derinlikte
+- `style`: `auto` (varsayılan) ajanın kararıdır: `analyze` slaytın içeriğine bakıp `chosen` (tarz), `zoom` (kamera
+  yakınlığı) ve `lead` (öne çıkan: başlık, sayı, grafik) yazar; gerekçe `note`'a `otomatik:` önekiyle düşer. Kurallar:
+  kapak ve az öğeli bölüm slaytları en güçlü kamera; sayı/grafik yoğun slaytlarda kamera sakin, veri önce gelir ve
+  açıklama sonra; paragraf ağırlıklı slaytlar `sakin`; görsel ağırlıklı, az metinli slaytlar `enerjik`; kapanış
+  slaytı yavaş geri çekilme; 180 kelimeyi aşan başvuru metinleri sabit. Deste tek aile içinde kalır (`sakin` ile
+  `enerjik` art arda gelmez). Elle bir tarz yazılırsa karar yalnızca not olarak kalır. Tarzlar: `sinematik` ( kamera başlığın üstünden geri çekilir, katmanlar farklı derinlikte
   kayar, öğeler bulanıktan netleşir, başlık kelime kelime / metin satır satır açılır, panellerden ışık geçer, sayaç
   bitince parlar), `sakin` (kamera yok, yumuşak netleşme ve satır satır metin; resmî sunumlar için), `enerjik` (daha
   yakın kamera, yaylanan ikonlar ve sayılar, hızlı tempo; tanıtım ve lansman için). Kullanıcı "daha sade" derse
@@ -63,7 +74,8 @@ anlatma, sonucu göster.
 - `media`: `true` ise slayttaki, düzendeki ya da asıl slayttaki animasyonlu GIF'ler ve videolar videonun içinde
   oynar (arka plan videosu verilerle tek bütün olur; slayt süresi videonun sonuna kadar uzar, en fazla 60 sn; videonun
   sesi klibe eklenir). `false` ise ilk kareleri durağan kalır.
-- `note`: kararının kısa gerekçesi (kullanıcıya rapor ederken kullanırsın).
+- `note`: kararın kısa gerekçesi (kullanıcıya rapor ederken kullanırsın). `otomatik:` ile başlıyorsa `analyze` yazmıştır
+  ve her çalıştırmada yenilenir; kendi notunu yazarsan korunur.
 
 Bu dosyayı düzenledikten sonra komutları yeniden çalıştır; kullanıcı düzenlemeleri korunur.
 
@@ -71,8 +83,9 @@ Bu dosyayı düzenledikten sonra komutları yeniden çalıştır; kullanıcı d�
 
 - `bin/slideready preview SUNUM.pptx` puanı en yüksek 2 slaytı 960×540, 30 fps render eder (birkaç saniye).
   Belirli slaytlar için `--slides 3,7`.
-- Kullanıcıya göster: `preview/NNN.mp4` dosyaları. Kısa bir özet yaz: "12 slayt buldum, 9'unu canlandıracağım,
-  3'ü sabit kalacak (kapak, ajanda, kaynakça). İşte 4 ve 7. slaytların önizlemesi." Sonra onay iste.
+- Kullanıcıya göster: `preview/NNN.mp4` dosyaları. Kısa bir özet yaz: "12 slayt buldum, 9'unu canlandıracağım. Kapakta güçlü bir kamera,
+  sayı slaytlarında önce sayılar, metin yoğun 5. slaytta sakin bir giriş seçtim. İşte 1 ve 3. slaytların önizlemesi."
+  Sonra onay iste.
 - Tüm sunumu önizleme kalitesinde render etme; amaç hızlı ve ucuz bir fikir vermek.
 
 ## 5. Kontrol listesi (kontak sayfası: %25, %50, %75 ve son kare)

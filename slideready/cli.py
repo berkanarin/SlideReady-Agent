@@ -19,7 +19,7 @@ from .doctor import main as doctor_main, node_env
 from .embed import duration, embed
 from . import pptrender
 from .media import collect as collect_media
-from .scene import build, default_plan, score
+from .scene import apply_auto, auto_plan, build, default_plan, score
 
 HERE = Path(__file__).resolve().parent
 QUALITY = {
@@ -59,15 +59,18 @@ def analyze(deck, work, quiet=False):
         except Exception:
             old = {}
     rows, plans = [], []
+    decisions = auto_plan(inv["slides"], inv["width"], inv["height"])   # ajan kararı: tarz, kamera, öne çıkan
     for s in inv["slides"]:
         kinds = [d["kind"] for d in s["shapes"]]
         s["score"] = round(score(s), 1)
         s["placeholder"] = any(PLACEHOLDER.search(d.get("text", "")) for d in s["shapes"])
         s["media"] = media.get(s["no"], [])
-        plan = {**default_plan(s), **old.get(s["no"], {})}
+        plan = apply_auto({**default_plan(s), **old.get(s["no"], {})}, decisions[s["no"]])
         plans.append(plan)
         rows.append(dict(no=s["no"], shapes=len(kinds), charts=kinds.count("chart"), tables=kinds.count("table"),
                          numbers=kinds.count("number"), score=s["score"], hidden=s["hidden"], placeholder=s["placeholder"], animate=plan["animate"],
+                         style=plan.get("chosen") or plan["style"] if plan["animate"] else "-",
+                         why=plan.get("note", "").removeprefix("otomatik: "),
                          media=", ".join(sorted({m["type"] for m in s["media"]})),
                          regions=sum(len(d["regions"]["blocks"]) for d in s["shapes"] if "regions" in d)))
     inv["missing_fonts"] = missing_fonts(inv["fonts"])
@@ -75,17 +78,17 @@ def analyze(deck, work, quiet=False):
     plan_path.write_text(json.dumps(dict(deck=str(deck), slides=plans), ensure_ascii=False, indent=1), encoding="utf-8")
     if not quiet:
         print(f"{deck.name}: {len(rows)} slayt · çalışma klasörü {work}")
-        print(f"{'no':>3} {'şekil':>5} {'grafik':>6} {'tablo':>5} {'sayı':>4} {'puan':>5}  not")
+        print(f"{'no':>3} {'şekil':>5} {'grafik':>6} {'tablo':>5} {'sayı':>4} {'puan':>5}  {'tarz':<10} not")
         for r in rows:
             notes = [n for n, c in (("gizli", r["hidden"]), ("yer tutucu metin", r["placeholder"]),
                                     ("sabit kalacak", not r["animate"]),
                                     (f"hareketli medya: {r['media']}", r["media"]),
                                     (f"resim içinde {r['regions']} blok", r["regions"])) if c]
-            print(f"{r['no']:>3} {r['shapes']:>5} {r['charts']:>6} {r['tables']:>5} {r['numbers']:>4} {r['score']:>5}  {', '.join(notes)}")
+            print(f"{r['no']:>3} {r['shapes']:>5} {r['charts']:>6} {r['tables']:>5} {r['numbers']:>4} {r['score']:>5}  {r['style']:<10} {'; '.join([r['why']] + notes) if r['why'] else ', '.join(notes)}")
         print("fontlar: " + ", ".join(inv["fonts"]))
         if inv["missing_fonts"]:
             print("⚠ eksik fontlar (yerine kullanılan): " + "; ".join(inv["missing_fonts"]))
-        print(f"plan: {plan_path}  (animate/tempo/hold/static alanlarını düzenleyebilirsiniz)")
+        print(f"plan: {plan_path}  (tarzları ajan seçti; style/tempo/hold/static/animate ile değiştirilebilir)")
     return inv, plans, rows
 
 

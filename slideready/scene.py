@@ -1,6 +1,7 @@
 """Koreografi ve sahne üretimi: slayt envanteri + SVG katmanları -> render(t) fonksiyonlu index.html."""
 import json
 import os
+import re
 from pathlib import Path
 
 from . import media as mediamod
@@ -26,7 +27,7 @@ STYLES = {
     "enerjik": dict(tempo=1.25, zoom=1.13, parallax=True, blur=6, sweep=True, glow=True, words=True, rise=42,
                     pop=1.0, line=0.08, word=0.04),
 }
-DEFAULT_STYLE = "sinematik"
+DEFAULT_STYLE = "auto"      # ajan slayt başına kendisi seçer (auto_style); kullanıcıya sorulmaz
 
 
 def _contains(a, b):
@@ -91,7 +92,13 @@ def choreograph(slide, plan, height):
         timeline.append(d)
         t += 0.2
     schedule(None, max(t + 0.15, 0.45))
-    tempo = float(plan.get("tempo") or 1.0)
+    if plan.get("lead") in ("number", "chart"):     # veri önde: serbest açıklama metinleri verilerden sonra gelir
+        data = [d["t0"] for d in timeline if d["kind"] in ("number", "chart", "table")]
+        after = max(data, default=0) + 0.3
+        for d in sorted(timeline, key=lambda d: d["t0"]):
+            if data and d["kind"] == "text" and d["parent"] is None and d["t0"] < after:
+                d["t0"], after = round(after, 3), after + STAGGER
+    tempo =float(plan.get("tempo") or 1.0)
     for d in timeline:
         d["t0"] = round(d["t0"] / tempo, 3)
     last = max((d["t0"] for d in timeline), default=0)
@@ -106,13 +113,89 @@ def choreograph(slide, plan, height):
     return [{k: d[k] for k in keep if k in d} for d in timeline], duration
 
 
-def style_of(plan):
-    """plan.json'daki tarz (bilinmeyen ad varsayılana düşer) ve tempo ile birleşmiş hâli."""
-    name = plan.get("style") if plan.get("style") in STYLES else DEFAULT_STYLE
-    st = dict(STYLES[name], name=name)
+CLOSING = re.compile(r"teşekkür|tesekkur|thank|sorular|questions|iletişim|contact", re.I)
+
+
+def _features(slide, W, H):
+    sh = [d for d in slide["shapes"] if d["kind"] != "static"]
+    k = [d["kind"] for d in sh]
+    words = sum(d.get("words", 0) for d in sh)
+    visual = sum(d["w"] * d["h"] for d in sh if d["kind"] in ("picture", "media")) / (W * H)
+    text = " ".join(d.get("text", "") for d in sh)
+    return dict(n=len(sh), words=words, longest=max((d.get("words", 0) for d in sh), default=0),
+                numbers=k.count("number"), data=k.count("chart") + k.count("table"), visual=visual,
+                closing=bool(CLOSING.search(text)))
+
+
+def _decide(f, no, last):
+    """(tarz, kamera yakınlığı, öne çıkan, gerekçe). Okuma her şeyden önce gelir; kamera veriyi gölgelemez.
+    Kısa etiketli kart ızgaraları metin yoğun sayılmaz; yoğunluk en uzun paragrafa ve toplam kelimeye bakar."""
+    dense_data = f["data"] or f["numbers"] >= 3
+    if f["words"] > 180:
+        return None, None, None, f"uzun başvuru metni ({f['words']} kelime): sabit kalır"
+    if f["longest"] >= 35 or f["words"] > 90:
+        return "sakin", None, "title", f"paragraf ağırlıklı metin ({f['longest']} kelimelik blok): hareket okumanın önüne geçmesin"
+    if no == last and (f["closing"] or f["n"] <= 6):
+        return "sinematik", 1.10, "title", "kapanış slaytı: yavaş, geniş bir geri çekilme"
+    if dense_data:
+        lead = "chart" if f["data"] else "number"
+        return "sinematik", 1.04, lead, ("grafik/tablo" if f["data"] else f"{f['numbers']} sayı") + \
+            ": sakin kamera, veri öne çıkar ve sayar, açıklama sonra gelir"
+    if no == 1:
+        return "sinematik", 1.12, "title", "kapak: en güçlü kamera hareketi"
+    if f["n"] <= 7 and f["words"] <= 25:
+        if f["visual"] > 0.25:
+            return "enerjik", None, "picture", "görsel ağırlıklı vurgu slaytı: canlı giriş"
+        return "sinematik", 1.12, "title", "az öğeli bölüm/vurgu slaytı: güçlü kamera"
+    if f["visual"] > 0.35 and f["words"] <= 15:
+        return "enerjik", None, "picture", "görsel ağırlıklı, az metin: canlı giriş"
+    return "sinematik", None, "title", "kartlı/karma düzen: okuma sırasıyla, derinlikli giriş"
+
+def auto_plan(slides, W, H):
+    """Destenin her slaytı için ajan kararı: tarz, kamera yakınlığı, öne çıkan öğe ve kısa gerekçe.
+    Deste tek bir aile içinde kalır: sakin ile enerjik art arda gelmez (enerjik sinematiğe iner)."""
+    last = max((s["no"] for s in slides if not s["hidden"]), default=0)
+    out = {s["no"]: _decide(_features(s, W, H), s["no"], last) for s in slides}
+    nos = sorted(out)
+    for a, b in zip(nos, nos[1:]):
+        for x, y in ((a, b), (b, a)):
+            if out[x][0] == "enerjik" and out[y][0] == "sakin":
+                st, z, lead, why = out[x]
+                out[x] = ("sinematik", z, lead, why + " (komşu slayt sakin: uyum için sinematik)")
+    return out
+
+
+def apply_auto(plan, decision):
+    """'auto' plana kararı yazar (chosen, zoom, lead, note). Kullanıcı tarzı elle seçtiyse karar yalnızca nottur."""
+    style, zoom, lead, why = decision
+    note = plan.get("note") or ""
+    if not note or note.startswith("otomatik:"):
+        plan["note"] = "otomatik: " + why
+    if plan.get("style", DEFAULT_STYLE) != "auto":
+        return plan
+    if style is None:
+        plan["animate"] = False
+        plan.pop("chosen", None)
+        return plan
+    plan.update(chosen=style, lead=lead)
+    if zoom:
+        plan["zoom"] = zoom
+    else:
+        plan.pop("zoom", None)
+    return plan
+
+
+def style_of(plan, slide=None):
+    """plan.json'daki tarz ve tempo ile birleşmiş hâli. "auto": analyze'ın seçtiği (chosen, zoom)."""
+    name = plan.get("style")
+    auto = name not in STYLES
+    if auto:
+        name = plan.get("chosen") if plan.get("chosen") in STYLES else "sinematik"
+    st = dict(STYLES[name], name=name, auto=auto)
+    if auto and plan.get("zoom") and st["zoom"] > 1:
+        st["zoom"] = float(plan["zoom"])
     st["tempo"] = round(st["tempo"] * float(plan.get("tempo") or 1.0), 3)
     return st
-
 
 def text_parts(g, words):
     """Metin katmanını satır (words=True ise kelime) bantlarına böler: [x, y, w, h, satır no] (svg birimi).
@@ -156,7 +239,7 @@ def _schedule_text(d, parts, st):
 
 def build(slide, layer, svgdeck, plan, outdir):
     """Slayt için index.html + scene.json yazar; süreyi döndürür."""
-    st = style_of(plan)
+    st = style_of(plan, slide)
     scene, duration = choreograph(slide, {**plan, "tempo": st["tempo"]}, svgdeck.viewbox[3])
     hold = float(plan.get("hold", 2.0))
     groups = {g["id"]: g for g in layer.get("groups") or []}

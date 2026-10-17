@@ -117,11 +117,37 @@ class Motion(unittest.TestCase):
     """Hareket tarzları ve metin bantları (saf Python)."""
 
     def test_styles(self):
-        from slideready.scene import DEFAULT_STYLE, STYLES, default_plan, style_of
-        self.assertEqual(default_plan(dict(no=1, hidden=False, shapes=[]))["style"], DEFAULT_STYLE)
-        self.assertEqual(style_of(dict(style="yok", tempo=1.0))["name"], DEFAULT_STYLE)
+        from slideready.scene import STYLES, default_plan, style_of
+        self.assertEqual(default_plan(dict(no=1, hidden=False, shapes=[]))["style"], "auto")
+        self.assertEqual(style_of(dict(style="auto", chosen="sakin"))["name"], "sakin")
+        self.assertEqual(style_of(dict(style="auto", chosen="sinematik", zoom=1.12))["zoom"], 1.12)
+        self.assertEqual(style_of(dict(style="sakin", chosen="enerjik"))["name"], "sakin")   # elle seçilen kazanır
         st = style_of(dict(style="enerjik", tempo=0.8))
         self.assertAlmostEqual(st["tempo"], STYLES["enerjik"]["tempo"] * 0.8)
+
+    def test_agent_decides_per_slide(self):
+        """Ajan kararı: kapak güçlü kamera, sayı slaytında veri önde, paragraf sakin, kapanış geri çekilme."""
+        from slideready.scene import apply_auto, auto_plan, default_plan
+
+        def shp(kind, x=1000, y=1000, w=5000, h=2000, **kw):
+            return dict(kind=kind, name=kind, x=x, y=y, w=w, h=h, **kw)
+        W, H = 33867, 19050
+        slides = [
+            dict(no=1, hidden=False, shapes=[shp("title", words=3, text="Yıl Sonu"), shp("text", words=4)]),
+            dict(no=2, hidden=False, shapes=[shp("title", words=2), *[shp("number", val="12") for _ in range(4)]]),
+            dict(no=3, hidden=False, shapes=[shp("title", words=2), shp("text", words=60)]),
+            dict(no=4, hidden=False, shapes=[shp("text", words=1, text="Teşekkürler")]),
+        ]
+        dec = auto_plan(slides, W, H)
+        self.assertEqual(dec[1][:2], ("sinematik", 1.12))
+        self.assertEqual(dec[2][0:3], ("sinematik", 1.04, "number"))
+        self.assertEqual(dec[3][0], "sakin")
+        self.assertIn("kapanış", dec[4][3])
+        plan = apply_auto(default_plan(slides[1]), dec[2])
+        self.assertEqual((plan["chosen"], plan["lead"]), ("sinematik", "number"))
+        self.assertTrue(plan["note"].startswith("otomatik:"))
+        manual = apply_auto({**default_plan(slides[1]), "style": "sakin", "note": "kullanıcı istedi"}, dec[2])
+        self.assertEqual((manual["note"], "chosen" in manual), ("kullanıcı istedi", False))
 
     def test_text_parts_tile_the_layer(self):
         """Bantlar katman kutusunu boşluksuz ve örtüşmeden kaplar: hepsi açılınca katmanın tamamı görünür."""

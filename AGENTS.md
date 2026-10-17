@@ -16,6 +16,9 @@ başlamadan önce onu oku ve adım adım uygula.
 ## Değişmez kurallar
 
 - Slaytı yeniden çizme, koordinat uydurma, sahne HTML'ini elle yazma. Ayar yalnızca `plan.json` ile yapılır.
+- Başta soru sorma: tarzı, tempoyu ve neyin öne çıkacağını `analyze`'ın kararı (`style: "auto"`) belirler. Önizlemeyle
+  birlikte tek kısa paragrafta slayt başına neyi neden seçtiğini söyle; kullanıcı bir cümleyle değiştirir. Yalnızca
+  sonucu değiştiren gerçek bir belirsizlikte (ör. yer tutucu metin) sor.
 - Önce önizleme (en fazla 1–2 slayt, düşük kalite), sonra onay, sonra tam çıktı.
 - Çıktı PPTX'tir; videolar otomatik başlar, döngü yoktur.
 - Veriyi değiştirme ya da uydurma; sunum dosyasını dışarı gönderme, her şey yerelde çalışır.

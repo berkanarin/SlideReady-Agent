@@ -102,7 +102,7 @@ bin/slideready export   sunum.pptx --quality 720   # daha küçük dosya
 | Alan | Anlamı |
 |---|---|
 | `animate` | `false`: slayt sabit kalır, video eklenmez |
-| `style` | `sinematik` (varsayılan: kamera, derinlik, odak çekme, kelime/satır metin, ışık süzmesi), `sakin`, `enerjik` |
+| `style` | `auto` (varsayılan): ajan slayt başına seçer ve gerekçeyi `note`'a yazar (`chosen`, `zoom`, `lead`). Elle: `sinematik` (kamera, derinlik, odak çekme, kelime/satır metin, ışık süzmesi), `sakin`, `enerjik` |
 | `tempo` | 1.0 normal, 0.8 sakin, 1.2 hızlı (tarzın kendi temposuyla çarpılır) |
 | `hold` | Son hareketten sonraki okuma payı (sn, en az 2) |
 | `static` | Hareket etmemesi gereken şekil adları (logo, dipnot…) |
