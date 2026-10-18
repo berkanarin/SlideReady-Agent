@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .layers import soffice_bin
+from .pptrender import available as powerpoint
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -30,8 +30,6 @@ def node_env():
 def _hint(tool):
     sysname = platform.system()
     hints = {
-        "libreoffice": {"Linux": "sudo apt-get install -y libreoffice-impress", "Darwin": "brew install --cask libreoffice",
-                        "Windows": "winget install TheDocumentFoundation.LibreOffice"},
         "ffmpeg": {"Linux": "sudo apt-get install -y ffmpeg", "Darwin": "brew install ffmpeg", "Windows": "winget install Gyan.FFmpeg"},
         "node": {"Linux": "https://nodejs.org (18+)", "Darwin": "brew install node", "Windows": "winget install OpenJS.NodeJS.LTS"},
     }
@@ -48,14 +46,14 @@ def checks():
         res.append(dict(name=name, ok=bool(ok), detail=detail, fix=None if ok else fix))
 
     add("Python 3.9+", sys.version_info >= (3, 9), platform.python_version(), "Python 3.9 veya üstünü kurun")
-    for mod in ("pptx", "lxml"):
+    for mod in ("pptx", "lxml", "PIL", "numpy"):
         try:
             importlib.import_module(mod)
             add(f"python: {mod}", True, "kurulu")
         except ImportError:
             add(f"python: {mod}", False, "yok", _hint("python"))
-    so = soffice_bin()
-    add("LibreOffice", so, so or "bulunamadı", _hint("libreoffice"))
+    ok, why = powerpoint(close=True)
+    add("PowerPoint (COM)", ok, why, "Windows'ta Microsoft PowerPoint (masaüstü) ve `python -m pip install pywin32` gerekir")
     for tool in ("ffmpeg", "ffprobe"):
         add(tool, shutil.which(tool), shutil.which(tool) or "bulunamadı", _hint("ffmpeg"))
     node = shutil.which("node")

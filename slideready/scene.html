@@ -14,86 +14,246 @@ svg g[data-a="line"]{transform-origin:left top}
 </svg>
 <script>
 // SlideReady sahnesi: render(t) saf fonksiyondur, aynı t her zaman aynı kareyi verir.
-const SCENE=/*SCENE*/, DUR=/*DUR*/;
+const SCENE=/*SCENE*/, MEDIA=/*MEDIA*/, STYLE=/*STYLE*/, DUR=/*DUR*/;
 const K=/*VBW*/ / 1920;                   // 1920 genişlikte 1 piksel = K svg birimi
 const svg=document.querySelector('body>svg'), NS='http://www.w3.org/2000/svg';
-svg.querySelectorAll('[visibility="hidden"]').forEach(n=>{ if(n.querySelector('[id^="container-"]')) n.removeAttribute('visibility'); });
+
 
 const clamp=x=>Math.max(0,Math.min(1,x));
 const out3=x=>1-Math.pow(1-clamp(x),3);
+const inout=x=>{x=clamp(x);return x<0.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;};
 const back=x=>{x=clamp(x);const c=1.7;return 1+(c+1)*Math.pow(x-1,3)+c*Math.pow(x-1,2);};
+const mix=(a,b,k)=>a+(b-a)*k;
+const set=(el,o)=>{for(const [k,v] of Object.entries(o)) el.setAttribute(k,v); return el;};
+const el=(tag,o={})=>set(document.createElementNS(NS,tag),o);
+const defs=()=>document.getElementById('sr-clips');
+let uid=0;
 
-// "12,4" "1.250" "3.250,75" gibi sayıları ayrıştırır; biçimi koruyarak k oranında yeniden yazar
-function numFmt(m){
-  const seps=m.match(/[.,]/g)||[]; let ts='',ds='';
-  if(seps.length>1){ ts=seps[0]; if(seps[seps.length-1]!==ts) ds=seps[seps.length-1]; }
-  else if(seps.length===1){ const tail=m.split(seps[0])[1]; if(tail.length===3 && !/^0/.test(m)) ts=seps[0]; else ds=seps[0]; }
-  const [ip,fp='']=ds?m.split(ds):[m,''];
-  const v=parseFloat(ip.split(ts||'\u0000').join('')+'.'+(fp||'0')), dec=fp.length;
-  return k=>{ let s=(v*k).toFixed(dec); let [a,b]=s.split('.');
-    if(ts) a=a.replace(/\B(?=(\d{3})+(?!\d))/g,ts);
-    return b?a+ds+b:a; };
-}
-const NUMRE=/\d{1,3}(?:[.,]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?/;
-function counters(root){
-  return [...root.querySelectorAll('tspan')].filter(t=>!t.children.length && NUMRE.test(t.textContent)).map(t=>{
-    const o=t.textContent, m=o.match(NUMRE)[0], f=numFmt(m);
-    const pos=t.closest('[y]'); return {t,o,m,f,y:pos?parseFloat(pos.getAttribute('y')):0};
-  });
-}
-function setCount(c,k){ c.t.textContent=c.o.replace(c.m,c.f(k)); }
 function wedge(cx,cy,r,a){                 // saat 12'den saat yönünde dilim
   if(a>=0.9999) return `M${cx-r},${cy-r}h${2*r}v${2*r}h${-2*r}z`;
   const e=-Math.PI/2+a*2*Math.PI, l=a>0.5?1:0;
   return `M${cx},${cy}L${cx},${cy-r}A${r},${r} 0 ${l} 1 ${cx+r*Math.cos(e)},${cy+r*Math.sin(e)}Z`;
 }
 
+// --- Odak çekme: her öğenin kendi Gauss bulanıklığı (SVG filtresi; 0'da filtre tamamen kalkar) ---
+function blurrer(node,vertical=false){
+  const f=el('filter',{id:'srf'+(uid++),x:'-30%',y:'-30%',width:'160%',height:'160%',
+    'color-interpolation-filters':'sRGB'}), b=el('feGaussianBlur',{stdDeviation:0});
+  f.appendChild(b); defs().appendChild(f);
+  return px=>{ if(px>0.05*K){ b.setAttribute('stdDeviation',vertical?`0 ${px}`:px); node.setAttribute('filter',`url(#${f.id})`); }
+               else node.removeAttribute('filter'); };
+}
+
+// --- Kamera: açılışta başlığın üstünden geri çekilir. Derinlik (parallax): arka plan yavaş, içerik tam hızda kayar.
+// Kamera ayarlı sürede (STYLE.camera.end) tam olarak birim dönüşüme varır; okuma payında hiçbir şey kımıldamaz. ---
+const VB=[/*VBW*/,/*VBH*/], CAM=STYLE.camera||{}, DEPTH={panel:0.7,line:0.85,deco:0.9,picture:0.9};
+function camera(t,d){
+  const Z=CAM.zoom||1, T=Math.max(CAM.end||1,0.1), e=1-inout(t/T);
+  if(Z<=1.0001||!CAM.focus||e<=0) return '';
+  const z=1+(Z-1)*e*d, C=[VB[0]/2,VB[1]/2];
+  const F=[0,1].map(i=>{ const f=C[i]+(CAM.focus[i]-C[i])*e*d, lo=VB[i]/(2*z); return Math.min(Math.max(f,lo),VB[i]-lo); });
+  return `matrix(${z},0,0,${z},${C[0]-F[0]*z},${C[1]-F[1]*z})`;
+}
+const cams=[...svg.querySelectorAll('g[data-k]')].map(g=>{
+  const w=el('g'); g.parentNode.insertBefore(w,g); w.appendChild(g);
+  w.style.transformBox='view-box'; w.style.transformOrigin='0 0';
+  return {w, d:STYLE.parallax?(DEPTH[g.dataset.k]||1):1};
+});
+const BGD=STYLE.cont?0:(STYLE.parallax?0.3:1);      // süreklilikte arka plan sabit: ortak öğeler kımıldamaz
+
+// --- Metin bantları: satır ya da kelime başına katmanın kırpılmış bir kopyası, okuma sırasıyla yükselip netleşir.
+// Hepsi açılınca kopyalar kalkar ve katmanın kendisi görünür: son kare PowerPoint'in çizdiğiyle aynıdır. ---
+function textParts(g,s){
+  const mid={}; s.parts.forEach(([x,y,w])=>{ const k=Math.round(y); mid[k]=mid[k]||[1e9,-1e9]; mid[k][0]=Math.min(mid[k][0],x); mid[k][1]=Math.max(mid[k][1],x+w); });
+  return s.parts.map(([x,y,w,h,t0])=>{
+    const m=mid[Math.round(y)], off=(x+w/2)-(m[0]+m[1])/2;
+    const cp=el('clipPath',{id:'srt'+(uid++),clipPathUnits:'userSpaceOnUse'});
+    cp.appendChild(el('rect',{x,y,width:w,height:h})); defs().appendChild(cp);
+    const c=g.cloneNode(true); c.removeAttribute('id'); c.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));
+    c.removeAttribute('data-a'); c.removeAttribute('data-k');
+    const wrap=el('g',{'clip-path':`url(#${cp.id})`}); wrap.appendChild(c); g.parentNode.insertBefore(wrap,g.nextSibling);
+    return {c,wrap,t0,off,blur:blurrer(c)};
+  });
+}
+
+// --- Işık süzmesi: panelin kendi saydamlığıyla maskelenmiş, çapraz bir ışık bandı bir kez üstünden geçer ---
+function sweeper(g){
+  const im=[...g.querySelectorAll('image')].pop(); if(!im) return null;
+  const b={x:+im.getAttribute('x'),y:+im.getAttribute('y'),w:+im.getAttribute('width'),h:+im.getAttribute('height')};
+  const id=uid++, m=el('mask',{id:'srm'+id,maskUnits:'userSpaceOnUse',x:b.x,y:b.y,width:b.w,height:b.h});
+  m.style.maskType='alpha'; m.appendChild(set(im.cloneNode(),{})); defs().appendChild(m);
+  const gr=el('linearGradient',{id:'srg'+id,gradientUnits:'userSpaceOnUse'});
+  const span=sweepStops(gr,200*K,65*K); defs().appendChild(gr);
+  const r=el('rect',{x:b.x,y:b.y,width:b.w,height:b.h,fill:`url(#srg${id})`,mask:`url(#srm${id})`});
+  r.style.mixBlendMode='screen'; g.appendChild(r);
+  const band=span;
+  return u=>{ const p=(u-0.45)/1.0;
+    if(p<=0||p>=1){ r.setAttribute('display','none'); return; }
+    r.removeAttribute('display');
+    const x=b.x-band+(b.w+2*band)*inout(p), y=b.y;
+    set(gr,{x1:x-band,y1:y-band*0.47,x2:x+band,y2:y+band*0.47}); };
+}
+
+// --- Sayaç parıltısı: sayı yerine oturunca son karenin bulanık bir kopyası kısa bir an parlar ---
+function glower(g){
+  const im=[...g.querySelectorAll('image')].pop(); if(!im) return null;
+  const c=set(im.cloneNode(),{display:'inline'}); c.removeAttribute('data-n');
+  const w=el('g'); w.appendChild(c); w.style.mixBlendMode='screen'; g.appendChild(w);
+  const blur=blurrer(w); blur(14*K);
+  return u=>{ const a=u<1.1?0:u<1.35?(u-1.1)/0.25:Math.max(0,1-(u-1.35)/0.7);
+    w.style.opacity=0.55*a; w.setAttribute('display',a>0?'inline':'none'); };
+}
+// Resim içindeki bloklar (metin/şekil resim olarak konmuşsa): her blok resmin kırpılmış bir kopyasıdır ve okuma
+// sırasıyla açılır. Opak zeminde blokların yeri zemin rengiyle örtülür; saydam zeminde resim yalnızca bloklardan oluşur.
+// Bloklar bitince kopyalar gizlenir ve resmin kendisi görünür: son kare orijinalin aynısıdır.
+function regionParts(it,g,s,i){
+  const R=s.regions, defs=document.getElementById('sr-clips'), wrap=document.createElementNS(NS,'g');
+  g.parentNode.insertBefore(wrap,g); wrap.appendChild(g);   // resim + örtüler + bloklar tek parça solar
+  it.wrap=wrap;
+  return R.blocks.map((b,k)=>{
+    const x=s.x+b[0]*s.w, y=s.y+b[1]*s.h, w=b[2]*s.w, h=b[3]*s.h;
+    const cp=document.createElementNS(NS,'clipPath'); cp.id=`srb${i}_${k}`; cp.setAttribute('clipPathUnits','userSpaceOnUse');
+    const r=document.createElementNS(NS,'rect'); for(const [a,v] of Object.entries({x,y,width:w,height:h})) r.setAttribute(a,v);
+    cp.appendChild(r); defs.appendChild(cp);
+    let cover=null;
+    if(R.bg){ cover=r.cloneNode(); cover.setAttribute('fill',R.bg); wrap.appendChild(cover); }
+    const c=g.cloneNode(true); c.removeAttribute('id'); c.querySelectorAll('[id]').forEach(n=>n.removeAttribute('id'));
+    c.removeAttribute('data-a'); c.setAttribute('clip-path',`url(#${cp.id})`);
+    wrap.appendChild(c);
+    return {c,cover,t0:s.bt[k]};
+  });
+}
 const items=SCENE.map((s,i)=>{
   const g=document.getElementById(s.id); if(!g) return null;
   g.setAttribute('data-a',s.kind);
-  const it={s,g};
-  if(s.kind==='number') it.nums=counters(g);
-  if(s.kind==='chart'||s.kind==='table'){
-    const cp=document.createElementNS(NS,'clipPath'); cp.id='src'+i; cp.setAttribute('clipPathUnits','userSpaceOnUse');
-    it.clip=document.createElementNS(NS,'path'); cp.appendChild(it.clip);
-    document.getElementById('sr-clips').appendChild(cp); g.setAttribute('clip-path',`url(#src${i})`);
+  const it={s,g,blur:blurrer(g)};
+  if(s.kind==='number'){                  // PowerPoint'in ara değerlerle çizdiği kareler (son kare şeklin kendisi)
+    it.frames=[...g.querySelectorAll('image[data-n]')].sort((a,b)=>a.dataset.n-b.dataset.n);
+    if(STYLE.glow) it.glow=glower(g);
   }
-  if(s.kind==='table') it.nums=counters(g).filter(c=>!/[^\d.,%₺$€+\-\s]/.test(c.o));
+  if(['chart','table','line'].includes(s.kind)){
+    const cp=el('clipPath',{id:'src'+i,clipPathUnits:'userSpaceOnUse'});
+    it.clip=el('path'); cp.appendChild(it.clip); defs().appendChild(cp); g.setAttribute('clip-path',`url(#src${i})`);
+  }
+  if(s.kind==='panel'&&STYLE.sweep) it.sweep=sweeper(g);
+  if(s.parts) it.text=textParts(g,s);
+  if(s.regions) it.parts=regionParts(it,g,s,i);
   return it;
 }).filter(Boolean);
+// Hareketli medya (GIF, video): slayttaki medya şeklinin katmanı (data-media, şeklin kendi kutusunda) her anda doğru
+// kareyi gösterir. Düzen ya da asıl slayttaki medya, onsuz çizilmiş arka planın (bgm.png) üstüne yerleştirilir.
+function imageBox(im){ const a=n=>parseFloat(im.getAttribute(n))||0; return {x:a('x'),y:a('y'),w:a('width'),h:a('height')}; }
+const media=MEDIA.map(m=>{
+  const tol=30+0.03*Math.max(m.w,m.h), near=b=>b&&['x','y','w','h'].every(k=>Math.abs(b[k]-m[k])<tol);
+  const els=new Set([...svg.querySelectorAll('image[data-media]')].filter(im=>near(imageBox(im))));
+  if(!els.size){                          // düzen/asıl slayt medyası: arka planın üstüne yerleştir
+    const im=document.createElementNS(NS,'image');
+    for(const [k,v] of Object.entries({x:m.x,y:m.y,width:m.w,height:m.h,preserveAspectRatio:'none'})) im.setAttribute(k,v);
+    document.getElementById('sr-bg').appendChild(im); els.add(im);
+  }
+  return {m, els:[...els], cur:-1};
+});
+const frameUrl=(m,i)=>m.src.replace('%05d',String(i+1).padStart(5,'0'));
+async function showFrame(it,i){
+  if(it.cur===i) return; it.cur=i;
+  const url=frameUrl(it.m,i);
+  await Promise.all(it.els.map(el=>new Promise(ok=>{
+    const done=()=>{ clearTimeout(tm); ok(); }, tm=setTimeout(ok,3000);
+    el.addEventListener('load',done,{once:true}); el.addEventListener('error',done,{once:true});
+    el.setAttribute('href',url); el.removeAttribute('xlink:href');
+  })));
+}
+async function renderMedia(t){
+  await Promise.all(media.map(it=>{ const {n,fps,loop}=it.m, f=Math.floor(Math.max(0,t)*fps+1e-6);
+    return showFrame(it, loop ? f%n : Math.min(n-1,f)); }));
+  if(media.length) await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+}
+
+/*FX_JS*/
+const FXU=fxSetup(items), bgBlur=blurrer(document.getElementById('sr-bg'));
 
 function render(t){
-  document.getElementById('sr-bg').style.cssText=`transform-box:view-box;transform-origin:center;transform:scale(${1.03-0.03*out3(t/DUR)})`;
+  const R=(STYLE.rise||20)*K, B=(STYLE.blur||0)*K, P=STYLE.pop||0;
+  const pop=(u,d)=>mix(out3(u/d),spring(u,170,13),P);            // yay fiziğiyle yerine oturma, tarza göre
+  const bg=document.getElementById('sr-bg');
+  bg.style.transformBox='view-box'; bg.style.transformOrigin='0 0';
+  bg.style.transform=(CAM.zoom||1)>1.0001 ? camera(t,BGD)            // kamera yoksa arka plan çok hafif yaklaşır
+    : `translate(${VB[0]/2}px,${VB[1]/2}px) scale(${1.025-0.025*inout(t/Math.max(CAM.end||DUR,0.1))}) translate(${-VB[0]/2}px,${-VB[1]/2}px)`;
+  for(const c of cams) c.w.style.transform=camera(t,c.d);
+  bgBlur(FX&&!STYLE.cont&&(CAM.zoom||1)>1.0001 ? 7*K*(1-inout(t/Math.max(CAM.end||1,.1))) : 0);   // alan derinliği
+  for(const f of FXU) f(t);
   for(const it of items){
-    const {s,g}=it, u=t-s.t0; let o=1, tf='';
+    const {s,g}=it, u=t-s.t0; let o=1, tf='', bl=0;
+    if(it.fxRender&&it.fxRender(t,u)) continue;
     switch(s.kind){
-      case 'title':  o=out3(u/0.5); tf=`translateY(${(1-out3(u/0.8))*28*K}px)`; break;
-      case 'panel':  o=out3(u/0.6); tf=`scale(${0.965+0.035*out3(u/0.7)})`; break;
-      case 'line':   { const p=out3(u/0.7); o=u>0?1:0; tf=s.w>=s.h?`scaleX(${p})`:`scaleY(${p})`; break; }
-      case 'deco':   o=out3(u/0.25); tf=`scale(${Math.max(0,back(u/0.55))})`; break;
-      case 'picture':o=out3(u/0.5); tf=`translateY(${(1-out3(u/0.6))*18*K}px) scale(${0.94+0.06*out3(u/0.6)})`; break;
-      case 'text':   o=out3(u/0.6); tf=`translateY(${(1-out3(u/0.7))*14*K}px)`; break;
+      case 'title': case 'text':
+        o=out3(u/0.5); tf=`translateY(${(1-out3(u/0.8))*R}px)`; bl=B*(1-out3(u/0.7)); break;
+      case 'panel': {
+        const k=pop(u,0.7); o=out3(u/0.55);
+        tf=`translateY(${(1-out3(u/0.8))*R*0.5}px) scale(${0.965+0.035*k})`; bl=B*0.6*(1-out3(u/0.6));
+        if(it.sweep) it.sweep(u); break;
+      }
+      case 'line': {                                     // çizgi kendi yönünde açılır (ok ucu bozulmaz)
+        const p=inout(u/0.75), b=s.box||[s.x,s.y,s.x+s.w,s.y+s.h], m=200, W=b[2]-b[0]+2*m, H=b[3]-b[1]+2*m;
+        it.clip.setAttribute('d', s.w>=s.h ? `M${b[0]-m},${b[1]-m}h${W*p}v${H}h${-W*p}z` : `M${b[0]-m},${b[1]-m}h${W}v${H*p}h${-W}z`);
+        o=u>0?1:0; break;
+      }
+      case 'deco':   o=out3(u/0.3); tf=`scale(${Math.max(0,pop(u,0.55))})`; bl=B*(1-out3(u/0.5)); break;
+      case 'picture':o=out3(u/0.6); tf=`translateY(${(1-out3(u/0.8))*R*0.6}px) scale(${1.06-0.06*out3(u/0.9)})`;
+                     bl=B*(1-out3(u/0.8)); break;
       case 'number': {
-        o=out3(u/0.3); tf=`scale(${0.88+0.12*back(u/0.5)})`;
-        const k=out3(u/1.4); it.nums.forEach(c=>setCount(c,k)); break;
+        o=out3(u/0.3); tf=`scale(${0.85+0.15*pop(u,0.55)})`; bl=B*(1-out3(u/0.4));
+        const k=out3(u/1.4);
+        if(it.odoRender) it.odoRender(t,u);
+        else if(it.frames.length>1){ const n=Math.round(k*(it.frames.length-1));
+          it.frames.forEach((im,i)=>im.setAttribute('display',i===n?'inline':'none')); }
+        if(it.glow) it.glow(u); break;
       }
       case 'chart': {
         const p=out3(u/1.4), {x,y,w,h}=s, pad=300;
         it.clip.setAttribute('d', s.chart==='pie' ? wedge(x+w/2,y+h/2,Math.max(w,h),u<=0?0:p)
           : s.chart==='column' ? `M${x-pad},${y+h+pad}h${w+2*pad}v${-(h+2*pad)*p}h${-(w+2*pad)}z`
           : `M${x-pad},${y-pad}h${(w+2*pad)*p}v${h+2*pad}h${-(w+2*pad)*p}z`);
+        if(s.chart==='pie'&&FX) tf=`scaleY(${0.55+0.45*spring(u,110,15)})`;     // hafif 3B eğimden düzleşir
+        if(it.edge) it.edge(u,p);
         o=u>0?1:0; break;
       }
-      case 'table': {                        // satır satır yukarıdan aşağı; sayılar satırları açılınca sayar
+      case 'table': {                        // satır satır yukarıdan aşağı
         const T=Math.min(2.2,0.3*(s.rows||5)), p=clamp(u/T), front=s.y+(s.h+100)*p;
         it.clip.setAttribute('d',`M${s.x-100},${s.y-100}h${s.w+200}v${front-s.y+100}h${-(s.w+200)}z`);
-        it.nums.forEach(c=>{ const lt=t-(s.t0+T*clamp((c.y-s.y)/s.h)); setCount(c,out3(lt/0.8)); });
         o=u>0?1:0; break;
       }
     }
-    g.style.opacity=u<=0?0:o; g.style.transform=tf;
+    if(it.text){                           // satır/kelime bantları; bitince katmanın kendisi
+      const done=t>=it.text[it.text.length-1].t0+0.9;
+      g.style.opacity=done?1:0; g.style.transform=''; it.blur(0);
+      for(const p of it.text){ const v=t-p.t0;
+        p.wrap.setAttribute('display',done||v<=0?'none':'inline');
+        p.c.style.opacity=out3(v/0.45);
+        const tr=FX&&s.kind==='title' ? p.off*0.35*(1-out3(v/0.9)) : 0;     // başlıkta harf aralığı daralarak oturur
+        p.c.style.transform=`translate(${tr}px,${(1-out3(v/0.7))*R*0.8}px)`;
+        p.blur(B*(1-out3(v/0.6))); }
+      continue;
+    }
+    g.style.opacity=u<=0?0:o; g.style.transform=tf; it.blur(u<=0?0:bl);
+    if(it.parts){                          // resim içi bloklar
+      const end=it.parts[it.parts.length-1].t0+0.7, done=t>=end;
+      it.wrap.style.opacity=g.style.opacity; g.style.transform='';
+      g.style.opacity=s.regions.bg||done?1:0;
+      for(const p of it.parts){ const v=t-p.t0;
+        if(p.cover) p.cover.style.opacity=done||v>0.05?0:1;
+        p.c.style.opacity=done||v<=0?0:out3(v/0.5);
+        p.c.style.transform=`translateY(${(1-out3(v/0.6))*14*K}px)`; }
+    }
   }
+  return renderMedia(t);
 }
+// Katmanlar ve efekt görselleri yüklenmeden ilk kare alınmaz (render.cjs bekler)
+window.SR_READY=Promise.all([...svg.querySelectorAll('image')].map(im=>{
+  const u=im.getAttribute('href'); if(!u) return null;
+  const i=new Image(); i.src=u; return i.decode().catch(()=>null);
+}).concat(FX_READY));
+window.SR_MOVING=t=>t<(STYLE.still??DUR);           // hareket bulanıklığı yalnızca hareket varken
 render(0);
 </script>
 </body></html>

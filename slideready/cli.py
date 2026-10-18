@@ -4,6 +4,7 @@
   slideready analyze  SUNUM.pptx        slaytları çözümler, plan.json yazar
   slideready preview  SUNUM.pptx        en zengin 1-2 slaydın hızlı önizlemesi (+ kontak sayfası)
   slideready export   SUNUM.pptx        tüm slaytları render eder ve videoları sunuma gömer
+  slideready check    SUNUM.pptx        klipleri değişmez kurallara göre denetler (ilk kare, tekrar, kare kaybı)
 """
 import argparse
 import json
@@ -16,9 +17,10 @@ from pathlib import Path
 from . import __version__
 from .deck import inventory
 from .doctor import main as doctor_main, node_env
-from .embed import embed
-from .layers import SvgDeck, convert, match
-from .scene import build, default_plan, score
+from .embed import duration, embed
+from . import pptrender, qa
+from .media import collect as collect_media
+from .scene import apply_auto, auto_plan, build, default_plan, score
 
 HERE = Path(__file__).resolve().parent
 QUALITY = {
@@ -47,9 +49,9 @@ def missing_fonts(names):
 
 
 def analyze(deck, work, quiet=False):
-    """PPTX + LibreOffice SVG -> analysis.json ve (kullanıcının düzenleyebileceği) plan.json"""
+    """PPTX -> analysis.json ve (kullanıcının düzenleyebileceği) plan.json. Çizim yapılmaz; PowerPoint gerekmez."""
     inv = inventory(deck)
-    svg = SvgDeck(convert(deck, work / "svg"))
+    media = collect_media(deck, work)
     plan_path = work / "plan.json"
     old = {}
     if plan_path.exists():
@@ -58,34 +60,37 @@ def analyze(deck, work, quiet=False):
         except Exception:
             old = {}
     rows, plans = [], []
+    decisions = auto_plan(inv["slides"], inv["width"], inv["height"])   # ajan kararı: tarz, kamera, öne çıkan
     for s in inv["slides"]:
-        layer = svg.slide(s["no"])
-        free = match(s["shapes"], layer["groups"])
         kinds = [d["kind"] for d in s["shapes"]]
-        s["unmatched"] = [d["name"] for d in s["shapes"] if "id" not in d]
-        s["unmatched_svg"] = len(free)
         s["score"] = round(score(s), 1)
         s["placeholder"] = any(PLACEHOLDER.search(d.get("text", "")) for d in s["shapes"])
-        plan = {**default_plan(s), **old.get(s["no"], {})}
+        s["media"] = media.get(s["no"], [])
+        plan = apply_auto({**default_plan(s), **old.get(s["no"], {})}, decisions[s["no"]])
         plans.append(plan)
         rows.append(dict(no=s["no"], shapes=len(kinds), charts=kinds.count("chart"), tables=kinds.count("table"),
-                         numbers=kinds.count("number"), score=s["score"], hidden=s["hidden"],
-                         unmatched=len(s["unmatched"]), placeholder=s["placeholder"], animate=plan["animate"]))
+                         numbers=kinds.count("number"), score=s["score"], hidden=s["hidden"], placeholder=s["placeholder"], animate=plan["animate"],
+                         style=plan.get("chosen") or plan["style"] if plan["animate"] else "-",
+                         why=plan.get("note", "").removeprefix("otomatik: "),
+                         media=", ".join(sorted({m["type"] for m in s["media"]})),
+                         regions=sum(len(d["regions"]["blocks"]) for d in s["shapes"] if "regions" in d)))
     inv["missing_fonts"] = missing_fonts(inv["fonts"])
     (work / "analysis.json").write_text(json.dumps(inv, ensure_ascii=False, indent=1), encoding="utf-8")
     plan_path.write_text(json.dumps(dict(deck=str(deck), slides=plans), ensure_ascii=False, indent=1), encoding="utf-8")
     if not quiet:
         print(f"{deck.name}: {len(rows)} slayt · çalışma klasörü {work}")
-        print(f"{'no':>3} {'şekil':>5} {'grafik':>6} {'tablo':>5} {'sayı':>4} {'puan':>5}  not")
+        print(f"{'no':>3} {'şekil':>5} {'grafik':>6} {'tablo':>5} {'sayı':>4} {'puan':>5}  {'tarz':<10} not")
         for r in rows:
             notes = [n for n, c in (("gizli", r["hidden"]), ("yer tutucu metin", r["placeholder"]),
-                                    (f"{r['unmatched']} şekil eşlenmedi", r["unmatched"]), ("sabit kalacak", not r["animate"])) if c]
-            print(f"{r['no']:>3} {r['shapes']:>5} {r['charts']:>6} {r['tables']:>5} {r['numbers']:>4} {r['score']:>5}  {', '.join(notes)}")
+                                    ("sabit kalacak", not r["animate"]),
+                                    (f"hareketli medya: {r['media']}", r["media"]),
+                                    (f"resim içinde {r['regions']} blok", r["regions"])) if c]
+            print(f"{r['no']:>3} {r['shapes']:>5} {r['charts']:>6} {r['tables']:>5} {r['numbers']:>4} {r['score']:>5}  {r['style']:<10} {'; '.join([r['why']] + notes) if r['why'] else ', '.join(notes)}")
         print("fontlar: " + ", ".join(inv["fonts"]))
         if inv["missing_fonts"]:
             print("⚠ eksik fontlar (yerine kullanılan): " + "; ".join(inv["missing_fonts"]))
-        print(f"plan: {plan_path}  (animate/tempo/hold/static alanlarını düzenleyebilirsiniz)")
-    return inv, svg, plans, rows
+        print(f"plan: {plan_path}  (tarzları ajan seçti; style/tempo/hold/static/animate ile değiştirilebilir)")
+    return inv, plans, rows
 
 
 def pick(spec, rows, n_auto=2):
@@ -114,14 +119,22 @@ def render(jobs, work):
 
 def scenes(deck, work, spec, default, n_auto=2):
     """Çözümler, slayt seçimini uygular ve seçilen slaytların sahnelerini yazar."""
-    inv, svg, plans, rows = analyze(deck, work)
+    inv, plans, rows = analyze(deck, work)
     plan = {p["no"]: p for p in plans}
-    built = []
+    nos = []
     for no in pick(spec or default, rows, n_auto):
-        if not plan[no]["animate"]:
+        if plan[no]["animate"]:
+            nos.append(no)
+        else:
             print(f"  slayt {no}: plan.json'da animate=false, atlandı")
-            continue
-        dur, sc = build(inv["slides"][no - 1], svg.slide(no), svg, plan[no], work / "scenes" / f"{no:03d}")
+    ok, why = pptrender.available()
+    if not ok:
+        sys.exit(f"PowerPoint ile çizilemiyor ({why}); `slideready doctor` çalıştırın.")
+    print("PowerPoint katmanları:")
+    layers = pptrender.render(deck, inv, work, nos)
+    built = []
+    for no in nos:
+        dur, sc = build(inv["slides"][no - 1], layers.slide(no, plan[no].get("media", True)), layers, plan[no], work / "scenes" / f"{no:03d}")
         built.append((no, dur, sc))
     return built, rows
 
@@ -132,6 +145,24 @@ def sheet(scene_dir, out):
     args = sum((["-i", str(p)] for p in stills), [])
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *args, "-filter_complex",
                     "xstack=inputs=4:layout=0_0|w0_0|0_h0|w0_h0", str(out)], check=True)
+
+
+def inv_media(work, no):
+    inv = json.loads((work / "analysis.json").read_text(encoding="utf-8"))
+    plan = {p["no"]: p for p in json.loads((work / "plan.json").read_text(encoding="utf-8"))["slides"]}
+    return inv["slides"][no - 1]["media"] if plan[no].get("media", True) else []
+
+
+def add_audio(clip, media):
+    """Slayttaki ilk sesli videonun sesini klibe ekler (orijinal video artık klibin altında kalıyor)."""
+    src = next((m for m in media if m["type"] == "video" and m.get("audio")), None)
+    if not src:
+        return
+    tmp = clip.with_name(clip.stem + "-a.mp4")
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(clip), "-i", src["file"], "-map", "0:v", "-map",
+                    "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", "-t", str(duration(clip)), "-movflags", "+faststart", str(tmp)],
+                   check=True)
+    tmp.replace(clip)
 
 
 def cmd_preview(a):
@@ -149,6 +180,8 @@ def cmd_preview(a):
     for no, d, sc in built:
         sheet(work / "scenes" / f"{no:03d}", pdir / f"{no:03d}-sheet.png")
         print(f"  slayt {no}: {d:.1f} sn, {len(sc)} hareketli öğe → {pdir / f'{no:03d}.mp4'}  (kontak: {no:03d}-sheet.png)")
+    print("\nkalite kontrolü:")
+    qa.show(*qa.run(deck, work))
 
 
 def cmd_export(a):
@@ -160,18 +193,37 @@ def cmd_export(a):
         q["fps"] = a.fps
     cdir = work / "clips"
     cdir.mkdir(exist_ok=True)
-    jobs = [dict(dir=str(work / "scenes" / f"{no:03d}"), out=str(cdir / f"{no:03d}.mp4"), **q) for no, _, _ in built]
+    jobs = [dict(dir=str(work / "scenes" / f"{no:03d}"), out=str(cdir / f"{no:03d}.mp4"), mb=a.motion_blur, **q)
+            for no, _, _ in built]
     print(f"\n{len(jobs)} slayt render ediliyor ({q['width']}x{q['height']}, {q['fps']} fps)…")
     render(jobs, work)
+    for no, _, _ in built:
+        add_audio(cdir / f"{no:03d}.mp4", inv_media(work, no))
     dst = Path(a.output).resolve() if a.output else deck.with_name(deck.stem + "-SlideReady.pptx")
-    done = embed(deck, {no: cdir / f"{no:03d}.mp4" for no, _, _ in built}, dst)
+    # --slides ile yalnızca bazı slaytlar yeniden render edildiyse öbürlerinin önceki klipleri de gömülür
+    live = {r["no"] for r in rows if r["animate"] and not r["hidden"]}
+    clips = {no: cdir / f"{no:03d}.mp4" for no in live if (cdir / f"{no:03d}.mp4").exists()}
+    done = embed(deck, clips, dst)
     size = dst.stat().st_size / 1e6
     print(f"\n✓ {dst}  ({size:.1f} MB)")
     print("  " + ", ".join(f"{no}: {d:.1f} sn" for no, d in done))
     skipped = [r["no"] for r in rows if r["no"] not in dict(done)]
     if skipped:
         print(f"  video eklenmeyen slaytlar: {', '.join(map(str, skipped))}")
-    print("  Videolar otomatik başlar, döngü yoktur; poster karesi tamamlanmış slayttır.")
+    print("  Videolar otomatik başlar, döngü yoktur; poster boş açılış karesidir, video bitince tamamlanmış slaytta kalır.")
+    print("\nkalite kontrolü:")
+    qa.show(*qa.run(deck, work, dst))
+
+
+def cmd_check(a):
+    deck = Path(a.deck).resolve()
+    work = workdir(deck, a.work)
+    if not (work / "plan.json").exists():
+        sys.exit("Önce `slideready analyze` ve `preview`/`export` çalıştırın.")
+    out = Path(a.output).resolve() if a.output else deck.with_name(deck.stem + "-SlideReady.pptx")
+    report, ok = qa.run(deck, work, out)
+    qa.show(report, ok)
+    return ok
 
 
 def main(argv=None):
@@ -181,18 +233,21 @@ def main(argv=None):
     d = sub.add_parser("doctor", help="ortamı kontrol et")
     d.add_argument("--json", action="store_true")
     for name, hlp in (("analyze", "slaytları çözümle, plan.json yaz"), ("preview", "hızlı önizleme"),
-                      ("export", "render et ve PPTX'e göm")):
+                      ("export", "render et ve PPTX'e göm"), ("check", "klipleri değişmez kurallara göre denetle")):
         s = sub.add_parser(name, help=hlp)
         s.add_argument("deck")
         s.add_argument("-w", "--work", help="çalışma klasörü (varsayılan: SUNUM.slideready/ sunumun yanında)")
         if name == "preview":
             s.add_argument("--slides", help="'auto' (varsayılan), '3' ya da '2,5-7'")
             s.add_argument("--count", type=int, default=2, help="auto modunda kaç slayt (varsayılan 2)")
+        if name in ("export", "check"):
+            s.add_argument("-o", "--output", help="çıktı PPTX (varsayılan: SUNUM-SlideReady.pptx)")
         if name == "export":
             s.add_argument("--slides", help="'all' (varsayılan) ya da '2,5-7'")
-            s.add_argument("-o", "--output", help="çıktı PPTX (varsayılan: SUNUM-SlideReady.pptx)")
             s.add_argument("--quality", choices=["1080", "720"], default="1080")
             s.add_argument("--fps", type=int)
+            s.add_argument("--motion-blur", type=int, default=4,
+                           help="hareket bulanıklığı alt kare sayısı (1 = kapalı, varsayılan 4)")
     a = p.parse_args(argv)
     if a.cmd == "doctor":
         sys.exit(0 if doctor_main(a.json) else 1)
@@ -201,5 +256,7 @@ def main(argv=None):
         analyze(deck, workdir(deck, a.work))
     elif a.cmd == "preview":
         cmd_preview(a)
+    elif a.cmd == "check":
+        sys.exit(0 if cmd_check(a) else 1)
     else:
         cmd_export(a)

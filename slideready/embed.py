@@ -2,7 +2,9 @@
 
 - Video slaytın en üst katmanında, tam ekran; orijinal şekiller altında düzenlenebilir kalır.
 - Slayt açılınca otomatik başlar, döngü yoktur (isteyen PowerPoint'te Oynatma > Durdurulana kadar döngü'yü açar).
-- Poster = videonun son karesi: oynamadan önce, PDF'te ve baskıda tamamlanmış slayt görünür.
+- Poster = videonun ilk karesi: PowerPoint posteri oynatma başlayana kadar gösterir; ilk kare olunca geçiş kesintisizdir
+  (son kare olsaydı slayt önce dolu görünür, sonra boşalıp canlanırdı). Video bitince son karede, yani tamamlanmış
+  slaytta kalır. Bedeli: düzenleme görünümünde, PDF'te ve baskıda açılış karesi görünür.
 - Slaytın eski giriş animasyonları kaldırılır (video artık onları içerir); slayt geçişleri korunur.
 - Daha önce SlideReady'nin eklediği videolar yeniden çalıştırmada değiştirilir.
 """
@@ -34,9 +36,8 @@ def duration(mp4):
     return float(out or 0)
 
 
-def last_frame(mp4, png):
-    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-sseof", "-0.1", "-i", str(mp4), "-update", "1",
-                    "-frames:v", "1", str(png)], check=True)
+def first_frame(mp4, png):
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", str(mp4), "-frames:v", "1", str(png)], check=True)
     return png
 
 
@@ -52,7 +53,7 @@ def embed(deck, clips, dst):
             for sh in list(sl.shapes):
                 if sh.name.startswith(PREFIX):
                     sh._element.getparent().remove(sh._element)
-            poster = last_frame(mp4, Path(tmp) / f"{no:03d}.png")
+            poster = first_frame(mp4, Path(tmp) / f"{no:03d}.png")
             mov = sl.shapes.add_movie(str(mp4), 0, 0, prs.slide_width, prs.slide_height,
                                       poster_frame_image=str(poster), mime_type="video/mp4")
             mov.name = f"{PREFIX} {no:02d}"
