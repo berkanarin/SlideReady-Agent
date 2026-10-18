@@ -15,7 +15,8 @@ geçirmezsin. Sana sunum dosyası ve çalışma klasörü (`SUNUM.slideready/`) 
    son kare). Her klibin ilk karesini ve boş açılışın bittiği anı da çıkarıp bak:
    `ffmpeg -v error -i X.mp4 -frames:v 1 X-0.png` ve `ffmpeg -v error -ss 0.35 -i X.mp4 -frames:v 1 X-1.png`.
    Kahraman anın ortasından birkaç kare daha çıkar (`-ss` ile). Kontrol et:
-   - İlk karede arka plan dışında bir şey var mı (yarım şekil, gölge, önceki slayttan kalıntı)?
+   - İlk karede ve boş açılışta arka plan dışında tek bir piksel bile var mı (yarım şekil, iz, gölge, bulanıklık
+     artığı, parçacık, yarı saydam hayalet, önceki slayttan kalıntı)? Varsa engelleyici; istisnası yok.
    - Slaytlar birbirinden gerçekten farklı açılıyor mu, yoksa hepsi "yukarı kayıp netleşme" mi?
    - Kamera sabit mi? Slayt büyüyor, kayıyor ya da arka plan oynuyorsa engelleyici.
    - Her öğe kendi hareketiyle mi geliyor? Bir tablo, grafik ya da kart grubu tek maskeyle veya üstünden geçen bir

@@ -366,7 +366,7 @@ class QualityGate(unittest.TestCase):
     def plan(self, slides):
         (self.tmp / "plan.json").write_text(json.dumps(dict(slides=slides)), encoding="utf-8")
 
-    def frames(self, direction="left", opening=0.5, move=1.0, hold=2.0, first_full=False, dup_at=None):
+    def frames(self, direction="left", opening=0.5, move=1.0, hold=2.0, first_full=False, dup_at=None, ghost=0.0):
         """Mavi kutu boş arka plandan seçilen yönden kayarak gelir ve yerinde durur."""
         np = self.np
         out = []
@@ -384,6 +384,8 @@ class QualityGate(unittest.TestCase):
             out.append(f)
         if first_full:
             out[0] = self.full.copy()
+        if ghost:                                         # ilk karede yarı saydam hayalet
+            out[0] = (self.bg * (1 - ghost) + self.full * ghost).astype(np.uint8)
         if dup_at is not None:
             out[dup_at] = out[dup_at - 1]
         return np.stack(out)
@@ -409,6 +411,19 @@ class QualityGate(unittest.TestCase):
         report, ok = self.check()
         self.assertFalse(ok)
         self.assertTrue(any("ilk kare" in e for e in report["clips"]["clips"][1]["errors"]))
+
+    def test_faint_ghost_in_first_frame_fails(self):
+        self.write(1, self.frames("left", ghost=0.12))
+        report, ok = self.check()
+        self.assertFalse(ok)
+        self.assertTrue(any("kalıntı" in e for e in report["clips"]["clips"][1]["errors"]), report)
+
+    def test_tiny_residue_fails(self):
+        fr = self.frames("left")
+        fr[0][100:103, 200:203] = (20, 60, 160)          # 3x3 piksellik artık
+        self.write(1, fr)
+        report, ok = self.check()
+        self.assertTrue(any("kalıntı" in e for e in report["clips"]["clips"][1]["errors"]), report)
 
     def test_short_empty_opening_fails(self):
         self.write(1, self.frames("left", opening=0.1, move=0.1))

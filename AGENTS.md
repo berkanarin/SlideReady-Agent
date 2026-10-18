@@ -16,8 +16,9 @@ başlamadan önce onu oku ve adım adım uygula.
 
 ## Değişmez kurallar
 
-- **Her klibin ilk karesi boştur:** yalnızca slaytın arka planı görünür, içerik ya da önceki slayttan kalıntı olmaz;
-  poster de bu karedir. Teslimden önce her videonun ilk karesini çıkarıp bak.
+- **Her klibin ilk karesi boştur, istisnasız:** yalnızca slaytın arka planı görünür; yarım şekil, iz, bulanıklık,
+  parçacık, yarı saydam hayalet ya da önceki slayttan kalıntı olmaz; poster de bu karedir. `bin/slideready check`
+  ilk kareleri arka planla piksel piksel karşılaştırır.
 - **Efektler tekrar etmez, tek efekt her şeye uygulanmaz:** sunum tek film olarak planlanır; her slaytın kahraman
   koreografisi, giriş yönü ve ritmi farklıdır, bir slayttaki öğe türleri farklı hareket eder. "Hepsi aynı" bir çıktı
   teslim edilmez.

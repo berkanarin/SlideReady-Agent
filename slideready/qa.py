@@ -27,6 +27,9 @@ SIZE = (192, 108)        # ölçüm çözünürlüğü
 OPEN_SECONDS = 0.3       # boş açılışın en kısa süresi
 INK = 25                 # bir pikseli "içerik" sayan fark (full ile bg arası, 0-255)
 EMPTY_FRAC = 0.02        # boş sayılan karede tam slayta yakın içerik pikseli oranı en çok
+RESIDUE = 14             # arka plandan bu kadar (0-255) farklı piksel kalıntı sayılır (sıkıştırma gürültüsünün üstü)
+RESIDUE_STRONG = 40      # bu kadar farklı piksel nereye düşerse düşsün kalıntıdır (sıkıştırma bu kadar sapmaz)
+RESIDUE_PIXELS = 4       # boş açılış karesinde izin verilen en çok kalıntı pikseli (sıkıştırma kenarları için)
 LAST_DIFF = 2.0          # son kare ile full.png arası ortalama fark en çok (0-255, sıkıştırma payıyla)
 STILL = 0.12             # iki kare arası "kımıldamıyor" sayılan ortalama fark
 MOVING = 0.6             # iki kare arası "hareket var" sayılan ortalama fark
@@ -36,7 +39,7 @@ GLOBAL = 0.4             # bir karede boş arka planın bu oranından fazlası d
 
 def _probe(mp4):
     out = subprocess.run(["ffprobe", "-v", "error", "-count_frames", "-select_streams", "v:0", "-show_entries",
-                          "stream=nb_read_frames,r_frame_rate,avg_frame_rate:format=duration", "-of", "json", str(mp4)],
+                          "stream=nb_read_frames,r_frame_rate,avg_frame_rate,width,height:format=duration", "-of", "json", str(mp4)],
                          capture_output=True, text=True, check=True).stdout
     info = json.loads(out)
     st = info["streams"][0]
@@ -46,15 +49,17 @@ def _probe(mp4):
         return float(a) / float(b or 1) if float(b or 1) else 0.0
 
     return dict(frames=int(st.get("nb_read_frames") or 0), fps=rate(st["r_frame_rate"]), avg=rate(st["avg_frame_rate"]),
+                size=(int(st.get("width") or SIZE[0]), int(st.get("height") or SIZE[1])),
                 duration=float(info["format"].get("duration") or 0))
 
 
-def frames(mp4, size=SIZE):
-    """Bütün kareler (n, h, w, 3) float32, 0-255."""
+def frames(mp4, size=SIZE, count=None, dtype=np.float32):
+    """Kareler (n, h, w, 3), 0-255; count verilirse yalnızca ilk count kare."""
     w, h = size
-    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(mp4), "-vf", f"scale={w}:{h}:flags=area", "-f", "rawvideo",
-                          "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
-    return np.frombuffer(raw, np.uint8).reshape(-1, h, w, 3).astype(np.float32)
+    lim = ["-frames:v", str(count)] if count else []
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(mp4), "-vf", f"scale={w}:{h}:flags=area", *lim,
+                          "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True, check=True).stdout
+    return np.frombuffer(raw, np.uint8).reshape(-1, h, w, 3).astype(dtype)
 
 
 def image(path, size=SIZE):
@@ -80,6 +85,28 @@ def media_mask(media, slide_w, slide_h, size=SIZE):
 
 def content_mask(full, bg, keep):
     return (np.abs(full - bg).max(axis=2) > INK) & keep
+
+
+def residue(frames_, bg, keep, full=None):
+    """Boş açılış karelerinde arka plandan ayrılan piksel sayısı ve en büyük fark (piksel piksel, klibin kendi
+    çözünürlüğünde).
+    Yarım şekil, iz, bulanıklık artığı, parçacık ya da yarı saydam hayalet bunu bozar. Hafif farklar ancak içeriğe
+    doğru (arka plandan tam slaytın rengine doğru) ise sayılır; böylece fotoğraflı arka plandaki sıkıştırma gürültüsü
+    kalıntı sanılmaz, ama yarı saydam bir hayalet yakalanır."""
+    out = []
+    for f in frames_:
+        f = f.astype(np.int16)
+        d = np.abs(f - bg).max(axis=2)
+        hit = d > RESIDUE_STRONG
+        if full is not None:
+            toward = ((f - bg).astype(np.int32) * (full - bg)).sum(axis=2) > 0     # fark içeriğin yönünde
+            hit |= (d > RESIDUE) & toward
+        else:
+            hit |= d > RESIDUE
+        if keep.any():
+            hit, d = hit[keep], d[keep]
+        out.append((int(hit.sum()), float(d.max()) if d.size else 0.0))
+    return out
 
 
 def filled(frame, full, bg, mask):
@@ -171,6 +198,16 @@ def check_clip(mp4, layer_dir, media, slide_w, slide_h, still_at=None):
         if first > EMPTY_FRAC:
             errors.append(f"ilk kare boş değil: içeriğin %{first * 100:.0f}'i görünüyor")
         k = max(1, math.ceil(OPEN_SECONDS * fps))
+        native = p["size"]
+        res = residue(frames(mp4, native, k, np.uint8), image(layer_dir / "bg.png", native).astype(np.int16),
+                      media_mask(media, slide_w, slide_h, native), image(layer_dir / "full.png", native).astype(np.int16))
+        out["first_residue"] = res[0][0] if res else 0
+        dirty = [i for i, (n, _) in enumerate(res) if n > RESIDUE_PIXELS]
+        if dirty and first <= EMPTY_FRAC:
+            n, mx = res[dirty[0]]
+            what = "ilk karede" if dirty[0] == 0 else f"boş açılışın {dirty[0] + 1}. karesinde"
+            errors.append(f"{what} içerik kalıntısı var: {n} piksel arka plandan farklı (en büyük fark {mx:.0f}/255); "
+                          "yarım şekil, iz, bulanıklık, parçacık ya da yarı saydam hayalet olmamalı")
         late = next((i for i in range(min(k, len(fr))) if filled(fr[i], full, bg, mask) > EMPTY_FRAC), None)
         if late is not None and first <= EMPTY_FRAC:
             errors.append(f"boş açılış {late / fps:.2f} sn sürüyor, en az {OPEN_SECONDS} sn olmalı "

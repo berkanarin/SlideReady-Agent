@@ -16,10 +16,12 @@ yeniden çizme, HTML yazma.** Yerleşim her zaman dosyadan gelir; senin elindeki
 
 ## Değişmez kurallar (hiçbir slaytta, hiçbir tarzda çiğnenmez)
 
-1. **İlk kare boştur.** Her klibin ilk karesinde yalnızca slaytın arka planı (arka plan rengi/görseli/videosu ile
-   asıl slayt ve düzen süsleri) görünür; hiçbir içerik şekli, metin ya da önceki slayttan kalan görüntü olmaz. Poster
-   de bu boş karedir. PowerPoint videoyu başlatırken dolu bir kare görünürse "önce dolu, sonra boş" sıçraması olur;
-   kullanıcı bunu kesinlikle istemiyor. Önceki slaytın son karesinden başlayan geçiş (`continuity`) kullanılmaz.
+1. **İlk kare boştur; içerikten tek bir piksel bile kalmaz.** Her klibin ilk karesi ve boş açılışın (en az 0,3 sn)
+   bütün kareleri, slaytın yalnızca arka planıyla (arka plan rengi/görseli/videosu ile asıl slayt ve düzen süsleri)
+   piksel piksel aynıdır. Yarım şekil, iz, bulanıklık artığı, gölge, parçacık, yarı saydam hayalet ya da önceki
+   slayttan kalıntı olmaz. Poster de bu boş karedir. Önceki slaytın son karesinden başlayan geçiş (`continuity`)
+   kullanılmaz. Bu kuralın istisnası yoktur; `check` ilk kareleri arka planla piksel piksel karşılaştırır ve tek bir
+   kalıntıda teslimi durdurur.
 2. **Efektler tekrar etmez, tek efekt her şeye uygulanmaz.** Sunum tek bir film gibi planlanır: her slaytın
    kahraman koreografisi, giriş yönü ve ritmi bir öncekinden farklıdır; aynı anda tek kahraman oynar. Bir slayttaki
    öğe türleri (başlık, metin, kart, tablo, sayı, grafik, ikon, görsel) birbirinden farklı hareket eder. Bir koreografi sunumda bir kez
@@ -143,7 +145,9 @@ Kullanıcıya raporu bu kararlardan, slayt başına bir satırla verirsin.
 **Otomatik:** `bin/slideready check SUNUM.pptx`. `preview` ve `export` bunu sonda kendiliğinden çalıştırır; sonucu
 `SUNUM.slideready/qa.json`'a da yazar. Ölçtükleri:
 
-- ilk kare boş ve boş açılış en az 0,3 sn (içerik pikselleri arka plana yakın; hareketli medya kutuları hariç),
+- ilk kare ve boş açılışın bütün kareleri arka planla piksel piksel aynı (klibin kendi çözünürlüğünde; 4'ten fazla
+  pikselde içeriğe doğru 14/255'i ya da herhangi bir yönde 40/255'i aşan fark kalıntıdır; hareketli medya kutuları
+  hariç), boş açılış en az 0,3 sn,
 - kare sayısı = süre × fps (±1), sabit kare hızı, hareket ortasında takılan (yinelenen) kare yok,
 - son kare PowerPoint'in çizdiği slayt, okuma payında hiçbir şey kımıldamıyor,
 - `plan.json`'da kahraman koreografi tekrarı ve art arda aynı açılış,

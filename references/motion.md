@@ -7,7 +7,9 @@ izleyicinin gözünü slaytın okuma sırasına taşımak için kurarsın.
 
 ## 1. Değişmezler (pazarlık yok)
 
-1. İlk kare boştur: yalnızca slaytın arka planı. Boş açılış 0,3–0,6 sn sürer.
+1. İlk kare boştur: yalnızca slaytın arka planı, içerikten tek bir piksel bile yok (yarım şekil, iz, bulanıklık
+   artığı, parçacık, yarı saydam hayalet yok). Boş açılış 0,3–0,6 sn sürer; bu sırada hiçbir öğe ekrana girmez.
+   Uzaktan uçan, parçacıktan toplanan ya da bulanıktan gelen öğeler de ilk karede görünmez, ilk karede alfa sıfırdır.
 2. **Kamera sabittir.** Pan, zoom, kamera turu, geri çekilme, slaytın bütününe eğim ya da paralaks yok. Arka plan
    ilk kareden son kareye kımıldamaz. Hareket eden yalnızca öğelerdir.
 3. **Her öğe kendi hareketiyle gelir.** Tablo satır satır ya da hücre hücre, kartlar tek tek, liste maddeleri

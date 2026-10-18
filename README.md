@@ -59,8 +59,9 @@ Elle seçilen tarz (`sinematik`, `sakin`, `enerjik`) ve elle yazılan notlar her
 
 ## Değişmez kurallar
 
-- **İlk kare boştur.** Her klip yalnızca slaydın arka planıyla açılır; içerik sonradan gelir, önceki slayttan hiçbir
-  şey taşınmaz. Ajan teslimden önce her videonun ilk karesini kontrol eder.
+- **İlk kare boştur, içerikten hiçbir kalıntı olmaz.** Her klip yalnızca slaydın arka planıyla açılır; yarım şekil,
+  iz, bulanıklık, parçacık ya da yarı saydam hayalet olmaz, önceki slayttan hiçbir şey taşınmaz. `check` ilk kareleri
+  arka planla piksel piksel karşılaştırır, tek bir kalıntıda teslimi durdurur.
 - **Efektler tekrar etmez, tek efekt her şeye uygulanmaz.** Sunum tek film gibi planlanır: her slaytın kahraman
   koreografisi, giriş yönü ve ritmi farklıdır; bir slayttaki başlık, kart, tablo ve sayılar farklı hareket eder.
   Ajan bütün slaytları yan yana koyup tekrarları düzeltmeden teslim etmez.
