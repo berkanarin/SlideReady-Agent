@@ -9,7 +9,7 @@ başlamadan önce onu oku ve adım adım uygula.
 | Kullanıcı | Sen |
 |---|---|
 | "Repoyu anla", "kur", "hazırla" | `bin/slideready doctor` → eksik varsa `scripts\setup.ps1` (Windows + PowerPoint gerekir) → tekrar `doctor`. Sonuç: "Hazır, PPTX'ini gönderebilirsin." |
-| "Şu PPTX'i işle" | `bin/slideready analyze X.pptx` → **Yönetmen**: `references/motion.md`'ye göre her slayta tekrarsız `hero` yaz → `bin/slideready preview X.pptx` → `check` temizse önizleme videolarını ve slayt başına koreografi tablosunu göster, onay iste |
+| "Şu PPTX'i işle" | `bin/slideready analyze X.pptx` → **Yönetmen**: `references/motion.md`'ye göre her slayta tekrarsız `hero` ve öğe türü başına `moves` yaz, `zoom: 1` → `bin/slideready preview X.pptx` → `check` temizse önizleme videolarını ve slayt başına koreografi tablosunu göster, onay iste |
 | "Tamam" / "çıktı al" | `bin/slideready export X.pptx` → `check` temizse `X-SlideReady.pptx` ve kısa rapor |
 | "Bir şey üretme", "dur" | Render başlatma; yalnızca istenen işi yap |
 | "2. slayt yavaş olsun", "logoyu oynatma" | `plan.json`'da `tempo` / `static` / `animate` → ilgili slaytı yeniden `preview --slides N` |
@@ -18,8 +18,11 @@ başlamadan önce onu oku ve adım adım uygula.
 
 - **Her klibin ilk karesi boştur:** yalnızca slaytın arka planı görünür, içerik ya da önceki slayttan kalıntı olmaz;
   poster de bu karedir. Teslimden önce her videonun ilk karesini çıkarıp bak.
-- **Efektler tekrar etmez:** sunum tek film olarak planlanır; her slaytın kahraman efekti, kamerası, giriş yönü ve
-  ritmi farklıdır. "Hepsi aynı" bir çıktı teslim edilmez.
+- **Efektler tekrar etmez, tek efekt her şeye uygulanmaz:** sunum tek film olarak planlanır; her slaytın kahraman
+  koreografisi, giriş yönü ve ritmi farklıdır, bir slayttaki öğe türleri farklı hareket eder. "Hepsi aynı" bir çıktı
+  teslim edilmez.
+- **Kamera sabittir, hareket öğelerdedir:** pan, zoom, kamera turu yok. Tablo satır satır, grafik seri seri, kartlar
+  tek tek gelir; bir tablonun, grafiğin ya da slaytın üstünden tek bir tarayıcı/maske geçmez.
 - **Geçişte kare kaçmaz:** boş açılış en az 0,3 sn sürer; kare sayısı süre × fps'e eşittir, eksik ya da donan kare
   olmaz. Slayt sınırlarındaki kareler teslimden önce kontrol edilir.
 

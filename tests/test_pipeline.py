@@ -455,6 +455,38 @@ class QualityGate(unittest.TestCase):
         self.assertEqual(len(report["posters"]), 1, report["posters"])
         self.assertIn("slayt 2", report["posters"][0])
 
+    def test_camera_move_fails(self):
+        from PIL import Image
+        np = self.np
+        stripes = self.bg.copy()
+        stripes[:, ::8] = (150, 160, 190)
+        self.bg = stripes
+        self.full = stripes.copy()
+        self.full[50:130, 60:260] = (20, 60, 160)
+        d = self.tmp / "layers" / "001"
+        Image.fromarray(self.bg).save(d / "bg.png")
+        Image.fromarray(self.full).save(d / "full.png")
+        fr = self.frames("left")
+        for i in range(15, 45):                          # arka plan kayıyor: pan
+            fr[i] = np.roll(fr[i], (45 - i) // 6 + 1, axis=1)
+        self.write(1, fr)
+        report, ok = self.check()
+        self.assertTrue(any("kamera" in e for e in report["clips"]["clips"][1]["errors"]), report)
+
+    def test_camera_zoom_in_plan_fails(self):
+        from slideready import qa
+        errors, _ = qa.check_plan([dict(no=1, hero="a", zoom=1.08), dict(no=2, hero="b")])
+        self.assertTrue(any("kamera" in e for e in errors))
+
+    def test_same_element_move_on_neighbours_fails(self):
+        from slideready import qa
+        errors, _ = qa.check_plan([dict(no=1, hero="a", moves=dict(tablo="satir-kayma", baslik="daktilo")),
+                                   dict(no=2, hero="b", moves=dict(tablo="satir-kayma", baslik="parcacik"))])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("tablo", errors[0])
+        errors, _ = qa.check_plan([dict(no=1, hero="a", moves=dict(tablo="tarayici"))])
+        self.assertTrue(any("bilinmeyen" in e for e in errors))
+
     def test_hero_may_return_after_a_long_gap(self):
         from slideready import qa
         heroes = ["a", "b", "c", "d", "e", "f", "a"]

@@ -1,16 +1,16 @@
 # SlideReady Agent
 
-**PowerPoint sunumunu bozmadan, elle yapılması çok zor bir hareket diliyle canlandırır.** Başlık kendi
-piksellerinden binlerce parçacıkla toplanır, sayılar odometre gibi rakam rakam döner, slaytlar birbirine tek bir film
-gibi akar, kamera katmanlar arasında derinlikle geri çekilir, panellerin üstünden ışık geçer; hepsi gerçek hareket
-bulanıklığıyla. Görüntüyü sizin PowerPoint'iniz çizer: videonun son karesi orijinal slaytın ta kendisidir.
+**PowerPoint sunumunu bozmadan, elle yapılması çok zor bir hareket diliyle canlandırır.** Her öğe kendi
+katmanıyla ve kendi hareketiyle gelir: başlık kendi piksellerinden binlerce parçacıkla toplanır, sayılar odometre
+gibi rakam rakam döner, kartlar tek tek yaylanır; kamera sabittir ve hiçbir slayt bir öncekinin hareketini
+tekrarlamaz. Hızlı hareketlerde gerçek hareket bulanıklığı vardır. Görüntüyü sizin PowerPoint'iniz çizer: videonun son karesi orijinal slaytın ta kendisidir.
 Çıktı yine **PPTX**'tir: her slaytta kendi videosu, otomatik başlar, döngü yoktur.
 
 ![SlideReady örnek çıktı](docs/demo.gif)
 
-*Yukarıdaki animasyon, repodaki kurgusal `examples/demo.pptx` dosyasının dört slaytının art arda oynatılmasıdır;
-hiçbir elle ayar yapılmadan üretildi (açılışta parçacıklarla toplanan başlık, odometre sayaçlar, slaytlar arası
-kesintisiz geçiş).*
+*Yukarıdaki animasyon, repodaki kurgusal `examples/demo.pptx` dosyasının dört slaytının art arda oynatılmasıdır.
+Önceki hareket motoruyla üretildi; kamera hareketi, slaytlar arası geçiş ve tablo/grafik üstünden geçen tarama gibi
+artık yasak olan hareketler içerir. Yeni kurallarla yenilenecek.*
 
 Claude (Claude Code skill'i) ve Codex (AGENTS.md) ile ajan olarak çalışır; tek başına komut satırı aracı olarak da
 kullanılabilir.
@@ -31,14 +31,14 @@ Değişiklik isterseniz tek cümle yeterli: "3. slayt daha sade olsun", "logoyu 
 
 Ajan iki aşamada karar verir ve başta soru sormaz:
 
-1. **Analiz:** `analyze` her slayda bakar ve `plan.json`'a tarz, kamera ve öne çıkan öğe için bir ilk karar yazar
+1. **Analiz:** `analyze` her slayda bakar ve `plan.json`'a tarz ve öne çıkan öğe için bir ilk karar yazar
    (`style: "auto"`, gerekçe `note` alanında). Paragraf ağırlıklı slaytlar `sakin`, görsel ağırlıklılar `enerjik`
    olur; 180 kelimeyi aşan başvuru metinleri sabit kalır.
 2. **Yönetmen:** ajan bütün sunumu tek film olarak planlar ve her slayta bir kahraman koreografi (`hero`) seçer:
-   parçacıklarla toplanan başlık, yerine oturan dev başlık, renk perdesi, derinlikten uçan kartlar, domino, iki
-   yandan buluşma, halka maske, çizim, mürekkep, sayaç anı, grafik büyümesi, kamera turu, daktilo, odak çekme,
-   geri çekilme. Aynı koreografi sunumda bir kez kullanılır, art arda iki slayt aynı biçimde açılmaz, kamera ve
-   tempo slayttan slayta değişir. Ayrıntılar ve süreler: [references/motion.md](references/motion.md).
+   parçacıklarla toplanan başlık, yerine oturan dev başlık, uzaktan uçup oturan kartlar, domino, iki yandan
+   buluşma, çizilip dolan kartlar, tablo dalgası, mürekkep, sayaç anı, grafik büyümesi, daktilo, ikon yağmuru,
+   kapanış. Slayttaki her öğe türüne de kendi havuzundan bir hareket seçer (`moves`). Aynı koreografi sunumda bir
+   kez kullanılır, ardışık slaytlarda aynı öğe aynı hareketle gelmez, kamera hiç oynamaz. Ayrıntılar ve süreler: [references/motion.md](references/motion.md).
 
 Elle seçilen tarz (`sinematik`, `sakin`, `enerjik`) ve elle yazılan notlar her zaman korunur.
 
@@ -48,13 +48,11 @@ Elle seçilen tarz (`sinematik`, `sakin`, `enerjik`) ve elle yazılan notlar her
 |---|---|
 | Parçacıklarla toplanma | Başlık, kendi piksellerinden örneklenmiş 2.500–9.000 parçacıktan oluşur; parçacıklar parlayan, kavisli bir akımla gelip harfleri soldan sağa doldurur, son anda gerçek katmana çözülür |
 | Odometre sayaç | PowerPoint her rakam konumu için 0–9 çeşitlerini çizer; her rakam kendi sütununda döner, hızla orantılı bulanıklaşır, kendi gecikmesiyle durur. ₺, %, M ve Türkçe sayı biçimi korunur |
-| Derinlikli kamera | Kamera açılışta yakından başlayıp geri çekilir; arka plan, paneller ve içerik farklı hızda kayar, arka plan bu sırada odak dışıdır |
-| Odak çekme | Öğeler bulanıktan netleşir |
 | Kinetik metin | Başlık kelime kelime, harf aralığı daralarak; gövde metni satır satır açılır (satır ve kelime yerleri PowerPoint'ten) |
-| Işık | Slaydın kendi renklerinden akan bir ışık perdesi; kapak ve bölümlerde kenardan ışık sızması; panellerin saydamlığıyla maskelenmiş iki katmanlı ışık süzmesi; sayı yerine oturunca kısa parıltı |
+| Vurgu | Sayı yerine oturunca kısa parıltı; bir slaytta en fazla bir öğede. Ekranı ya da bir tabloyu süpüren ışık perdesi yok |
 | Mürekkep açılışı | Büyük görseller gürültü eşiği, parlayan yanık kenar ve sönen bükülmeyle açılır |
 | Yay fiziği | İkonlar, kartlar ve sayılar yaylanarak yerine oturur |
-| Grafikler | Pasta saat yönünde açılırken hafif 3B eğimden düzleşir; sütun, çubuk ve çizgi grafiklerde ilerleyen kenar parlar; tablolar satır satır gelir |
+| Grafikler ve tablolar | Hedef: her sütun, dilim, seri ve tablo satırı kendi katmanıyla, kendi gecikmesiyle gelir (bkz. Sınırlar) |
 | Hareket bulanıklığı | Çıktıda her kare, 180° obtüratörle alınmış 4 alt karenin ortalamasıdır; yalnızca hareket varken |
 | GIF ve video | Slayttaki, düzendeki ya da asıl slayttaki GIF ve videolar kendi kareleriyle oynar; arka plan videosu verilerle tek bütündür |
 | Resim olarak konmuş metin | Ekran görüntüsü gibi düz zeminli resimler blok blok, okuma sırasıyla açılır |
@@ -63,14 +61,17 @@ Elle seçilen tarz (`sinematik`, `sakin`, `enerjik`) ve elle yazılan notlar her
 
 - **İlk kare boştur.** Her klip yalnızca slaydın arka planıyla açılır; içerik sonradan gelir, önceki slayttan hiçbir
   şey taşınmaz. Ajan teslimden önce her videonun ilk karesini kontrol eder.
-- **Efektler tekrar etmez.** Sunum tek film gibi planlanır: her slaytın kahraman efekti, kamerası, giriş yönü ve
-  ritmi farklıdır. Ajan bütün slaytları yan yana koyup tekrarları düzeltmeden teslim etmez.
+- **Efektler tekrar etmez, tek efekt her şeye uygulanmaz.** Sunum tek film gibi planlanır: her slaytın kahraman
+  koreografisi, giriş yönü ve ritmi farklıdır; bir slayttaki başlık, kart, tablo ve sayılar farklı hareket eder.
+  Ajan bütün slaytları yan yana koyup tekrarları düzeltmeden teslim etmez.
+- **Kamera sabittir.** Pan, zoom, kamera turu yok; arka plan kımıldamaz. Hareket yalnızca öğelerdedir ve bir tablonun,
+  grafiğin ya da slaytın tamamının üstünden tek bir tarayıcı veya maske geçmez.
 - **Geçişte kare kaçmaz.** Boş açılış en az 0,3 sn sürer; PowerPoint videoyu başlatırken ilk kareleri yutsa bile
   hareket kaybolmaz. Ajan her klipte kare sayısını ve slayt sınırlarındaki kareleri kontrol eder.
 - **Son kare PowerPoint'in kendisidir.** Her efekt PowerPoint'in çizdiği katmandan beslenir ve bitince katmanın
   kendisine devreder. Son kare PowerPoint'in kendi slayt görüntüsüyle ölçülür (`layers/NNN/layers.json` →
   `fidelity`); örnek destelerde ortalama fark 0,05/255'in altındadır.
-- **Okuma payında hiçbir şey kımıldamaz.** Kamera, ışık ve parçacıklar okuma payından önce durur; her slaytın sonunda
+- **Okuma payında hiçbir şey kımıldamaz.** Bütün öğe hareketleri ve parçacıklar okuma payından önce durur; her slaytın sonunda
   en az 2 saniye (metin arttıkça daha uzun) durağan okuma payı vardır. Metin hareketli bir görselin üstünden geçmez.
 
 ## Nasıl çalışır
@@ -138,7 +139,10 @@ bin/slideready check    sunum.pptx                 # kalite kontrolü: boş ilk 
 | Alan | Anlamı |
 |---|---|
 | `animate` | `false`: slayt sabit kalır, video eklenmez |
-| `style` | `auto` (varsayılan): ajan seçer (`chosen`, `zoom`, `lead`, `hero` alanlarını yazar). Elle: `sinematik`, `sakin` (efektsiz, sade), `enerjik` (daha yakın kamera, belirgin yaylanma, hızlı tempo) |
+| `style` | `auto` (varsayılan): ajan seçer (`chosen`, `lead` alanlarını yazar). Elle: `sinematik`, `sakin` (efektsiz, sade), `enerjik` (belirgin yaylanma, hızlı tempo) |
+| `hero` | Slaytın kahraman koreografisi; sunumda bir kez kullanılır ([references/motion.md](references/motion.md)) |
+| `moves` | Öğe türü başına hareket (başlık, metin, kart, tablo, sayı, grafik, ikon, görsel); ardışık slaytlarda aynı tür aynı hareketle gelmez |
+| `zoom` | Her zaman 1: kamera sabittir |
 | `tempo` | 1.0 normal, 0.8 sakin, 1.2 hızlı (tarzın kendi temposuyla çarpılır) |
 | `effects` | `true` (varsayılan): yukarıdaki gösteri efektleri. `false`: yalnızca tarzın temel hareketleri |
 | `hold` | Son hareketten sonraki okuma payı (sn, en az 2) |
@@ -172,13 +176,14 @@ bin/slideready check    sunum.pptx                 # kalite kontrolü: boş ilk 
 - Render için Windows ve masaüstü PowerPoint gerekir; macOS ve Linux'ta yalnızca `analyze` çalışır.
 - Tablo hücrelerindeki sayılar saymaz (tablo satır satır açılır); tek başına duran sayılar odometreyle döner.
 - Grafikler maskeyle açılır; serilerin tek tek gelmesi için grafiklerin veriden yeniden çizilmesi planlanıyor.
-- Gerçek 3B perspektifli kamera yok (derinlik katmanların farklı hızda kaymasıyla verilir); harf harf 3B dönüş ve
-  ses tasarımı henüz yok.
+- Bugünkü motorda grafikler ve tablolar tek katman olarak maskeyle açılır, kamera hareketi ve slaytlar arası geçiş
+  hâlâ kodda durur. Bunlar yeni kurallara aykırıdır ve `check` tarafından yakalanır; grafiklerin seri/eleman,
+  tabloların satır/hücre katmanlarına ayrılması ve kameranın kaldırılması motorda yazılma aşamasındadır.
+- Harf harf 3B dönüş ve ses tasarımı henüz yok.
 - SmartArt ve gömülü Excel nesneleri tek parça açılır.
 - Otomatik başlatma PowerPoint 2016+ içindir; Google Slides ve Keynote gömülü videoyu otomatik oynatmaz.
-- Koreografi kataloğunun bir kısmı (perde, domino, buluşma, halka, çizim, dev başlık, kamera turu, daktilo, odak)
-  hareket motorunda yazılma aşamasındadır; motor tanımadığı bir koreografiyi yok sayar. `check` aynı biçimde açılan
-  slaytları yine yakalar.
+- Koreografi kataloğunun ve `moves` havuzlarının bir kısmı hareket motorunda yazılma aşamasındadır; motor tanımadığı
+  bir hareketi yok sayar. `check` aynı biçimde açılan slaytları ve kamera hareketini yine yakalar.
 - Planlananlar: PowerPoint'teki mevcut animasyon sırasını okuma, tıklama başına parça video, PDF girdisi.
 
 ---

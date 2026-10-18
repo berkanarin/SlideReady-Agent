@@ -9,6 +9,8 @@ Kurallar (SKILL.md "Değişmez kurallar"):
   3. Son kare PowerPoint'in kendi çizimidir (full.png).
   4. Okuma payında hiçbir şey kımıldamaz.
   5. Kare kaçmaz: kare sayısı süre x fps, sabit kare hızı, hareket ortasında yinelenen (takılan) kare yok.
+  6. Kamera sabit, efektler öğelere uygulanır: içeriğin dışında kalan boş arka plan hiçbir karede topluca değişmez
+     (zoom, pan, ekranı süpüren perde ya da tarayıcı bunu bozar).
 
 Ölçümler küçültülmüş karelerde yapılır; hareketli medya (arka plan videosu, GIF) kutuları ölçümün dışında tutulur.
 """
@@ -29,6 +31,7 @@ LAST_DIFF = 2.0          # son kare ile full.png arası ortalama fark en çok (0
 STILL = 0.12             # iki kare arası "kımıldamıyor" sayılan ortalama fark
 MOVING = 0.6             # iki kare arası "hareket var" sayılan ortalama fark
 SIMILAR = 0.12           # iki açılış imzası arası bu uzaklığın altındaysa aynı hareket sayılır
+GLOBAL = 0.4             # bir karede boş arka planın bu oranından fazlası değişiyorsa kamera ya da bütün slayt efekti
 
 
 def _probe(mp4):
@@ -92,6 +95,22 @@ def steps(fr, keep):
     d = np.abs(np.diff(fr, axis=0)).mean(axis=3)
     d = d[:, keep].mean(axis=1)
     return np.concatenate([[0.0], d])
+
+
+def dilate(mask, r=3):
+    out = mask.copy()
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            out |= np.roll(np.roll(mask, dy, axis=0), dx, axis=1)
+    return out
+
+
+def global_motion(fr, bg, mask, keep):
+    """Her karede, içeriğin (ve gölgesinin) dışında kalan arka plan piksellerinin değişen oranı."""
+    free = keep & ~dilate(mask)
+    if free.mean() < 0.1:
+        return None
+    return (np.abs(fr - bg[None]).max(axis=3)[:, free] > 6).mean(axis=1)
 
 
 def stutters(st):
@@ -167,6 +186,11 @@ def check_clip(mp4, layer_dir, media, slide_w, slide_h, still_at=None):
             return out
         if not mask.any():
             warnings.append("arka plandan ayrılan içerik yok: ilk kare ve açılış imzası ölçülemedi")
+        gm = global_motion(fr, bg, mask, keep)
+        if gm is not None and gm.max() > GLOBAL:
+            i = int(gm.argmax())
+            errors.append(f"kamera hareketi ya da bütün slaytı kaplayan efekt: {i / fps:.2f} sn'de boş arka planın "
+                          f"%{gm[i] * 100:.0f}'i değişiyor (kamera sabit kalmalı, efektler öğelere uygulanmalı)")
         st = steps(fr, keep)
         bad = stutters(st)
         if bad:
@@ -181,6 +205,18 @@ def check_clip(mp4, layer_dir, media, slide_w, slide_h, still_at=None):
     return out
 
 
+# öğe türü başına hareket havuzu (references/motion.md, 4. bölüm); plan.json "moves" alanı bunlardan seçer
+MOVES = {
+    "baslik": ["kelime-yukselme", "daktilo", "harf-araligi", "parcacik", "dev-olcek"],
+    "metin": ["satir-maske", "madde-kayma", "kelime-netlesme"],
+    "kart": ["yay-buyume", "domino", "cerceve-cizim", "ucus", "bulusma"],
+    "tablo": ["satir-kayma", "hucre-dalga", "sutun-sutun"],
+    "sayi": ["odometre", "odometre-yay"],
+    "grafik": ["seri-seri", "eleman-eleman"],
+    "ikon": ["yay-belirme", "donerek-oturma", "dusme"],
+    "gorsel": ["murekkep", "kenar-kayma", "netlesme"],
+    "cizgi": ["cizilme"],
+}
 REUSE_GAP = 4            # bir kahraman koreografi ancak arada en az bu kadar canlı slayt varsa yeniden kullanılabilir
 
 
@@ -205,6 +241,22 @@ def check_plan(plans):
     for a, b in zip(live, live[1:]):
         if key(a) == key(b):
             errors.append(f"slayt {a['no']} ve {b['no']}: aynı açılış (koreografi, tarz, kamera, öne çıkan aynı)")
+    for p in live:
+        for kind, move in (p.get("moves") or {}).items():
+            if kind not in MOVES:
+                errors.append(f"slayt {p['no']}: bilinmeyen öğe türü '{kind}' (moves)")
+            elif move not in MOVES[kind]:
+                errors.append(f"slayt {p['no']}: '{kind}' için bilinmeyen hareket '{move}' ({', '.join(MOVES[kind])})")
+    for a, b in zip(live, live[1:]):
+        ma, mb = a.get("moves") or {}, b.get("moves") or {}
+        same = [k for k in ma if k in mb and ma[k] == mb[k] and len(MOVES.get(k, [])) > 1]
+        if same:
+            errors.append(f"slayt {a['no']} ve {b['no']}: {', '.join(same)} aynı hareketle geliyor (moves)")
+    for p in live:
+        if float(p.get("zoom") or 1) != 1:
+            errors.append(f"slayt {p['no']}: kamera yakınlığı {p['zoom']} (kamera sabit olmalı, zoom 1)")
+        if p.get("continuity"):
+            errors.append(f"slayt {p['no']}: continuity açık (klip önceki slayttan başlamamalı)")
     if len(live) >= 3 and not any(p.get("hero") for p in live):
         warnings.append("hiçbir slayta kahraman koreografi (hero) yazılmamış: Yönetmen adımı atlanmış")
     return errors, warnings
