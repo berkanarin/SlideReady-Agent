@@ -15,6 +15,11 @@ başlamadan önce onu oku ve adım adım uygula.
 
 ## Değişmez kurallar
 
+- **Her klibin ilk karesi boştur:** yalnızca slaytın arka planı görünür, içerik ya da önceki slayttan kalıntı olmaz;
+  poster de bu karedir. Teslimden önce her videonun ilk karesini çıkarıp bak.
+- **Efektler tekrar etmez:** sunum tek film olarak planlanır; her slaytın kahraman efekti, kamerası, giriş yönü ve
+  ritmi farklıdır. "Hepsi aynı" bir çıktı teslim edilmez.
+
 - Slaytı yeniden çizme, koordinat uydurma, sahne HTML'ini elle yazma. Ayar yalnızca `plan.json` ile yapılır.
 - Başta soru sorma: tarzı, tempoyu ve neyin öne çıkacağını `analyze`'ın kararı (`style: "auto"`) belirler. Önizlemeyle
   birlikte tek kısa paragrafta slayt başına neyi neden seçtiğini söyle; kullanıcı bir cümleyle değiştirir. Yalnızca

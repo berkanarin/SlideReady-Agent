@@ -51,7 +51,6 @@ olur; diğerleri destekleyicidir. Elle seçilen tarz (`sinematik`, `sakin`, `ene
 |---|---|
 | Parçacıklarla toplanma | Başlık, kendi piksellerinden örneklenmiş 2.500–9.000 parçacıktan oluşur; parçacıklar parlayan, kavisli bir akımla gelip harfleri soldan sağa doldurur, son anda gerçek katmana çözülür |
 | Odometre sayaç | PowerPoint her rakam konumu için 0–9 çeşitlerini çizer; her rakam kendi sütununda döner, hızla orantılı bulanıklaşır, kendi gecikmesiyle durur. ₺, %, M ve Türkçe sayı biçimi korunur |
-| Slaytlar arası süreklilik | Klip önceki slaydın son karesinden başlar; değişen yerler bükülüp gürültüyle erir, ortak öğeler (logo, şerit) kımıldamaz. Sunum sırayla oynatılınca tek bir film gibi akar |
 | Derinlikli kamera | Kamera açılışta yakından başlayıp geri çekilir; arka plan, paneller ve içerik farklı hızda kayar, arka plan bu sırada odak dışıdır |
 | Odak çekme | Öğeler bulanıktan netleşir |
 | Kinetik metin | Başlık kelime kelime, harf aralığı daralarak; gövde metni satır satır açılır (satır ve kelime yerleri PowerPoint'ten) |
@@ -63,8 +62,12 @@ olur; diğerleri destekleyicidir. Elle seçilen tarz (`sinematik`, `sakin`, `ene
 | GIF ve video | Slayttaki, düzendeki ya da asıl slayttaki GIF ve videolar kendi kareleriyle oynar; arka plan videosu verilerle tek bütündür |
 | Resim olarak konmuş metin | Ekran görüntüsü gibi düz zeminli resimler blok blok, okuma sırasıyla açılır |
 
-## İki değişmez kural
+## Değişmez kurallar
 
+- **İlk kare boştur.** Her klip yalnızca slaydın arka planıyla açılır; içerik sonradan gelir, önceki slayttan hiçbir
+  şey taşınmaz. Ajan teslimden önce her videonun ilk karesini kontrol eder.
+- **Efektler tekrar etmez.** Sunum tek film gibi planlanır: her slaytın kahraman efekti, kamerası, giriş yönü ve
+  ritmi farklıdır. Ajan bütün slaytları yan yana koyup tekrarları düzeltmeden teslim etmez.
 - **Son kare PowerPoint'in kendisidir.** Her efekt PowerPoint'in çizdiği katmandan beslenir ve bitince katmanın
   kendisine devreder. Son kare PowerPoint'in kendi slayt görüntüsüyle ölçülür (`layers/NNN/layers.json` →
   `fidelity`); örnek destelerde ortalama fark 0,05/255'in altındadır.
@@ -136,7 +139,6 @@ bin/slideready export   sunum.pptx --motion-blur 1 # hareket bulanıklığı kap
 | `style` | `auto` (varsayılan): ajan seçer (`chosen`, `zoom`, `lead`, `hero` alanlarını yazar). Elle: `sinematik`, `sakin` (efektsiz, sade), `enerjik` (daha yakın kamera, belirgin yaylanma, hızlı tempo) |
 | `tempo` | 1.0 normal, 0.8 sakin, 1.2 hızlı (tarzın kendi temposuyla çarpılır) |
 | `effects` | `true` (varsayılan): yukarıdaki gösteri efektleri. `false`: yalnızca tarzın temel hareketleri |
-| `continuity` | `true` (varsayılan): klip önceki slaydın son karesinden başlar. `false`: slayt kendi açılışından başlar |
 | `hold` | Son hareketten sonraki okuma payı (sn, en az 2) |
 | `static` | Hareket etmemesi gereken şekil adları (logo, dipnot…) |
 | `media` | `false`: GIF ve videolar ilk karelerinde durağan kalır |
@@ -157,8 +159,8 @@ bin/slideready export   sunum.pptx --motion-blur 1 # hareket bulanıklığı kap
 - Orijinal sunumun kopyasıdır; videolar canlandırılan her slaytın en üst katmanına tam ekran yerleşir.
 - Video slayt açılınca **otomatik başlar, döngü yoktur.** Döngü isterseniz PowerPoint'te videoyu seçip
   Oynatma > "Durdurulana kadar döngü"yü işaretleyin.
-- Poster karesi videonun ilk karesidir (süreklilik açıkken bu, önceki slaydın son karesidir): PowerPoint oynatma
-  başlayana kadar posteri gösterir, böylece slayt dolu görünüp sonra boşalmaz ve geçiş kesintisiz olur. Video bitince
+- Her klibin ilk karesi boştur: yalnızca slaydın arka planı görünür, içerik sonradan gelir. Poster de bu karedir;
+  PowerPoint oynatma başlayana kadar posteri gösterir, böylece slayt dolu görünüp sonra boşalmaz. Video bitince
   son karede (tamamlanmış slaytta) kalır. Düzenleme görünümünde, PDF'te ve baskıda açılış karesi görünür.
 - Orijinal şekiller videonun altında, düzenlenebilir hâlde kalır; konuşmacı notları korunur.
 - Slaytların eski giriş animasyonları kaldırılır (video artık onları içerir), slayt geçişleri korunur.
