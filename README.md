@@ -68,6 +68,8 @@ olur; diğerleri destekleyicidir. Elle seçilen tarz (`sinematik`, `sakin`, `ene
   şey taşınmaz. Ajan teslimden önce her videonun ilk karesini kontrol eder.
 - **Efektler tekrar etmez.** Sunum tek film gibi planlanır: her slaytın kahraman efekti, kamerası, giriş yönü ve
   ritmi farklıdır. Ajan bütün slaytları yan yana koyup tekrarları düzeltmeden teslim etmez.
+- **Geçişte kare kaçmaz.** Boş açılış en az 0,3 sn sürer; PowerPoint videoyu başlatırken ilk kareleri yutsa bile
+  hareket kaybolmaz. Ajan her klipte kare sayısını ve slayt sınırlarındaki kareleri kontrol eder.
 - **Son kare PowerPoint'in kendisidir.** Her efekt PowerPoint'in çizdiği katmandan beslenir ve bitince katmanın
   kendisine devreder. Son kare PowerPoint'in kendi slayt görüntüsüyle ölçülür (`layers/NNN/layers.json` →
   `fidelity`); örnek destelerde ortalama fark 0,05/255'in altındadır.

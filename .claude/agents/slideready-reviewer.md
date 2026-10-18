@@ -13,6 +13,10 @@ Sen SlideReady'nin Kontrolcüsüsün. Sana bir çalışma klasörü (`SUNUM.slid
    - **Efektler tekrar ediyor mu?** `plan.json`'da slaytların `hero`, `chosen`, `zoom`, `lead` alanlarını yan yana
      koy ve kontak sayfalarını karşılaştır. Aynı kahraman efekt iki slaytta, aynı efekt + kamera birleşimi art arda
      ya da üç slayt üst üste aynı açılış varsa bu da **engelleyici** bir sorundur.
+   - **Kare kaçıyor mu?** Her mp4 için `ffprobe -v error -count_frames -select_streams v:0 -show_entries
+     stream=nb_read_frames,avg_frame_rate:format=duration -of csv=p=0 X.mp4` ile kare sayısını süre × fps ile
+     karşılaştır (±1). İlk 0,3 sn'den birkaç kare çıkar: hepsi boş arka plan olmalı. Tek parça film varsa slayt
+     sınırlarındaki kareleri çıkar: dolu, bozuk ya da eksik kare **engelleyici** bir sorundur.
 1. `analysis.json`'da `missing_fonts` ve slaytlardaki `unmatched` alanlarını oku.
 2. `preview/*-sheet.png` kontak sayfalarına bak (sol üst %25, sağ üst %50, sol alt %75, sağ alt son kare).
 3. Her slayt için kontrol et:

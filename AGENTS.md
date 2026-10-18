@@ -19,6 +19,8 @@ başlamadan önce onu oku ve adım adım uygula.
   poster de bu karedir. Teslimden önce her videonun ilk karesini çıkarıp bak.
 - **Efektler tekrar etmez:** sunum tek film olarak planlanır; her slaytın kahraman efekti, kamerası, giriş yönü ve
   ritmi farklıdır. "Hepsi aynı" bir çıktı teslim edilmez.
+- **Geçişte kare kaçmaz:** boş açılış en az 0,3 sn sürer; kare sayısı süre × fps'e eşittir, eksik ya da donan kare
+  olmaz. Slayt sınırlarındaki kareler teslimden önce kontrol edilir.
 
 - Slaytı yeniden çizme, koordinat uydurma, sahne HTML'ini elle yazma. Ayar yalnızca `plan.json` ile yapılır.
 - Başta soru sorma: tarzı, tempoyu ve neyin öne çıkacağını `analyze`'ın kararı (`style: "auto"`) belirler. Önizlemeyle

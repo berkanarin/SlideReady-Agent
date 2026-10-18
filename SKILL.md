@@ -26,8 +26,11 @@ yeniden çizme, HTML yazma.** Yerleşim her zaman dosyadan gelir; senin elindeki
    gelmez. "Hepsi aynı hareket" sonucu başarısızlıktır: kullanıcıya teslim etme, planı değiştir.
 3. **Son kare PowerPoint'in kendi çizimidir** (ortalama fark ≤1/255).
 4. **Okuma süresinde hiçbir şey kıpırdamaz.**
+5. **Geçişte kare kaçmaz.** Boş açılış karesi en az 0,3 sn bekler; PowerPoint slayta geçip videoyu başlatırken ilk
+   kareleri yutsa bile hiçbir hareket kaybolmaz ve ekranda dolu bir kare belirmez. Klipte eksik, yinelenen ya da
+   donan kare olmaz; kare sayısı süre × fps'e eşittir.
 
-Teslimden önce 1 ve 2'yi kendin doğrula (aşağıda "Kontrol listesi"). Doğrulamadığın bir sonucu kullanıcıya
+Teslimden önce 1, 2 ve 5'i kendin doğrula (aşağıda "Kontrol listesi"). Doğrulamadığın bir sonucu kullanıcıya
 gönderme.
 
 ## Ekip ve sıra
@@ -130,6 +133,13 @@ slaytların kararını yan yana koy ve şu tabloyu kendin için yaz:
   dışında tek bir şekil, metin ya da önceki slayttan kalıntı görürsen teslim etme; nedenini bul ve düzelt.
 - **Tekrar var mı?** Bütün slaytların kontak sayfalarını yan yana koy. İki slayt aynı biçimde açılıyorsa (aynı
   efekt, aynı yön, aynı kamera) Yönetmen tablosuna dön.
+- **Kare kaçıyor mu?** Her klipte kare sayısını süreyle karşılaştır:
+  `ffprobe -v error -count_frames -select_streams v:0 -show_entries stream=nb_read_frames,avg_frame_rate:format=duration -of csv=p=0 NNN.mp4`
+  (kare sayısı = süre × fps, ±1). Hareket bölümünde donan ya da yinelenen kare ara:
+  `ffmpeg -i NNN.mp4 -vf mpdecimate -loglevel debug -f null - 2>&1 | grep -c " drop "` yalnızca boş açılış ve okuma
+  payı kadar düşürme göstermeli. İlk 0,3 sn'nin (yaklaşık 18 kare, 60 fps) tamamı boş arka plan olmalı. Tek parça
+  film üretildiyse slayt sınırlarındaki kareleri de çıkar ve bak: önceki slaytın son karesinden sonra doğrudan boş
+  arka plan gelmeli, arada dolu ya da bozuk kare olmamalı.
 
 - Son kare orijinal slaytla aynı mı (eksik/kaymış şekil yok)?
 - Metin hiçbir anda hareketli bir görselin üstünde ya da yarı saydam durumda okunmaz kalmıyor mu?
