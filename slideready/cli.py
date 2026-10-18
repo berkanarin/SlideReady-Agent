@@ -4,6 +4,7 @@
   slideready analyze  SUNUM.pptx        slaytları çözümler, plan.json yazar
   slideready preview  SUNUM.pptx        en zengin 1-2 slaydın hızlı önizlemesi (+ kontak sayfası)
   slideready export   SUNUM.pptx        tüm slaytları render eder ve videoları sunuma gömer
+  slideready check    SUNUM.pptx        klipleri değişmez kurallara göre denetler (ilk kare, tekrar, kare kaybı)
 """
 import argparse
 import json
@@ -17,7 +18,7 @@ from . import __version__
 from .deck import inventory
 from .doctor import main as doctor_main, node_env
 from .embed import duration, embed
-from . import pptrender
+from . import pptrender, qa
 from .media import collect as collect_media
 from .scene import apply_auto, auto_plan, build, default_plan, score
 
@@ -179,6 +180,8 @@ def cmd_preview(a):
     for no, d, sc in built:
         sheet(work / "scenes" / f"{no:03d}", pdir / f"{no:03d}-sheet.png")
         print(f"  slayt {no}: {d:.1f} sn, {len(sc)} hareketli öğe → {pdir / f'{no:03d}.mp4'}  (kontak: {no:03d}-sheet.png)")
+    print("\nkalite kontrolü:")
+    qa.show(*qa.run(deck, work))
 
 
 def cmd_export(a):
@@ -197,14 +200,30 @@ def cmd_export(a):
     for no, _, _ in built:
         add_audio(cdir / f"{no:03d}.mp4", inv_media(work, no))
     dst = Path(a.output).resolve() if a.output else deck.with_name(deck.stem + "-SlideReady.pptx")
-    done = embed(deck, {no: cdir / f"{no:03d}.mp4" for no, _, _ in built}, dst)
+    # --slides ile yalnızca bazı slaytlar yeniden render edildiyse öbürlerinin önceki klipleri de gömülür
+    live = {r["no"] for r in rows if r["animate"] and not r["hidden"]}
+    clips = {no: cdir / f"{no:03d}.mp4" for no in live if (cdir / f"{no:03d}.mp4").exists()}
+    done = embed(deck, clips, dst)
     size = dst.stat().st_size / 1e6
     print(f"\n✓ {dst}  ({size:.1f} MB)")
     print("  " + ", ".join(f"{no}: {d:.1f} sn" for no, d in done))
     skipped = [r["no"] for r in rows if r["no"] not in dict(done)]
     if skipped:
         print(f"  video eklenmeyen slaytlar: {', '.join(map(str, skipped))}")
-    print("  Videolar otomatik başlar, döngü yoktur; poster açılış karesidir, video bitince tamamlanmış slaytta kalır.")
+    print("  Videolar otomatik başlar, döngü yoktur; poster boş açılış karesidir, video bitince tamamlanmış slaytta kalır.")
+    print("\nkalite kontrolü:")
+    qa.show(*qa.run(deck, work, dst))
+
+
+def cmd_check(a):
+    deck = Path(a.deck).resolve()
+    work = workdir(deck, a.work)
+    if not (work / "plan.json").exists():
+        sys.exit("Önce `slideready analyze` ve `preview`/`export` çalıştırın.")
+    out = Path(a.output).resolve() if a.output else deck.with_name(deck.stem + "-SlideReady.pptx")
+    report, ok = qa.run(deck, work, out)
+    qa.show(report, ok)
+    return ok
 
 
 def main(argv=None):
@@ -214,16 +233,17 @@ def main(argv=None):
     d = sub.add_parser("doctor", help="ortamı kontrol et")
     d.add_argument("--json", action="store_true")
     for name, hlp in (("analyze", "slaytları çözümle, plan.json yaz"), ("preview", "hızlı önizleme"),
-                      ("export", "render et ve PPTX'e göm")):
+                      ("export", "render et ve PPTX'e göm"), ("check", "klipleri değişmez kurallara göre denetle")):
         s = sub.add_parser(name, help=hlp)
         s.add_argument("deck")
         s.add_argument("-w", "--work", help="çalışma klasörü (varsayılan: SUNUM.slideready/ sunumun yanında)")
         if name == "preview":
             s.add_argument("--slides", help="'auto' (varsayılan), '3' ya da '2,5-7'")
             s.add_argument("--count", type=int, default=2, help="auto modunda kaç slayt (varsayılan 2)")
+        if name in ("export", "check"):
+            s.add_argument("-o", "--output", help="çıktı PPTX (varsayılan: SUNUM-SlideReady.pptx)")
         if name == "export":
             s.add_argument("--slides", help="'all' (varsayılan) ya da '2,5-7'")
-            s.add_argument("-o", "--output", help="çıktı PPTX (varsayılan: SUNUM-SlideReady.pptx)")
             s.add_argument("--quality", choices=["1080", "720"], default="1080")
             s.add_argument("--fps", type=int)
             s.add_argument("--motion-blur", type=int, default=4,
@@ -236,5 +256,7 @@ def main(argv=None):
         analyze(deck, workdir(deck, a.work))
     elif a.cmd == "preview":
         cmd_preview(a)
+    elif a.cmd == "check":
+        sys.exit(0 if cmd_check(a) else 1)
     else:
         cmd_export(a)

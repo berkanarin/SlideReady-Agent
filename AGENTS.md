@@ -9,8 +9,9 @@ başlamadan önce onu oku ve adım adım uygula.
 | Kullanıcı | Sen |
 |---|---|
 | "Repoyu anla", "kur", "hazırla" | `bin/slideready doctor` → eksik varsa `scripts\setup.ps1` (Windows + PowerPoint gerekir) → tekrar `doctor`. Sonuç: "Hazır, PPTX'ini gönderebilirsin." |
-| "Şu PPTX'i işle" | `bin/slideready analyze X.pptx` → gerekirse `X.slideready/plan.json`'u düzenle → `bin/slideready preview X.pptx` → önizleme videolarını ve kısa özeti göster, onay iste |
-| "Tamam" / "çıktı al" | `bin/slideready export X.pptx` → `X-SlideReady.pptx` ve kısa rapor |
+| "Şu PPTX'i işle" | `bin/slideready analyze X.pptx` → **Yönetmen**: `references/motion.md`'ye göre her slayta tekrarsız `hero` yaz → `bin/slideready preview X.pptx` → `check` temizse önizleme videolarını ve slayt başına koreografi tablosunu göster, onay iste |
+| "Tamam" / "çıktı al" | `bin/slideready export X.pptx` → `check` temizse `X-SlideReady.pptx` ve kısa rapor |
+| "Bir şey üretme", "dur" | Render başlatma; yalnızca istenen işi yap |
 | "2. slayt yavaş olsun", "logoyu oynatma" | `plan.json`'da `tempo` / `static` / `animate` → ilgili slaytı yeniden `preview --slides N` |
 
 ## Değişmez kurallar
@@ -27,6 +28,8 @@ başlamadan önce onu oku ve adım adım uygula.
   birlikte tek kısa paragrafta slayt başına neyi neden seçtiğini söyle; kullanıcı bir cümleyle değiştirir. Yalnızca
   sonucu değiştiren gerçek bir belirsizlikte (ör. yer tutucu metin) sor.
 - Önce önizleme (en fazla 1–2 slayt, düşük kalite), sonra onay, sonra tam çıktı.
+- `bin/slideready check` "TESLİM ETME" diyorsa sonucu kullanıcıya gösterme: düzelt, sorunlu slaytları yeniden render
+  et, yeniden denetle.
 - Çıktı PPTX'tir; videolar otomatik başlar, döngü yoktur.
 - Veriyi değiştirme ya da uydurma; sunum dosyasını dışarı gönderme, her şey yerelde çalışır.
 - Kullanıcıyla onun dilinde, kısa konuş; doğrulayamadığın şeyi (ör. gerçek PowerPoint'te oynatma) açıkça söyle.
@@ -34,7 +37,10 @@ başlamadan önce onu oku ve adım adım uygula.
 ## Geliştirme
 
 - Kod: `slideready/` (Python CLI) + `slideready/pptrender.py` (PowerPoint COM ile katmanlar) +
-  `slideready/render.cjs` (Playwright) + `slideready/scene.html` (hareket dili).
+  `slideready/render.cjs` (Playwright) + `slideready/scene.html` ve `fx.js` (hareket dili) +
+  `slideready/qa.py` (değişmez kuralların ölçümü, `slideready check`).
+- Hareket dili ve koreografi kataloğu `references/motion.md`'dedir; motora yeni bir koreografi eklerken adını oradaki
+  `hero` adıyla aynı tut.
 - Test: `python -m unittest discover tests` (PowerPoint gerektiren testler Windows dışında atlanır); uçtan uca:
   `bin/slideready preview examples/demo.pptx`.
 - Örnek deste `examples/make_demo.py` ile üretilir; içerik kurgusaldır. Repoya gerçek kurum sunumu, logosu ya da

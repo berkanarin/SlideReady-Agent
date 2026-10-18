@@ -332,5 +332,136 @@ class Media(unittest.TestCase):
             self.assertLess(box[2], bg.width * 0.15)
 
 
+def _clip(path, frames, fps=30):
+    """(n, h, w, 3) uint8 kareleri mp4'e yazar."""
+    n, h, w, _ = frames.shape
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{w}x{h}",
+                    "-r", str(fps), "-i", "-", "-c:v", "libx264", "-crf", "16", "-pix_fmt", "yuv420p", str(path)],
+                   input=frames.tobytes(), check=True)
+
+
+@unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg gerekli")
+class QualityGate(unittest.TestCase):
+    """slideready check: ilk kare boş, kare kaybı yok, son kare PowerPoint, okuma payı durağan, tekrar yok."""
+    W, H, FPS = 320, 180, 30
+
+    def setUp(self):
+        import numpy as np
+        from PIL import Image
+        self.np = np
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.bg = np.full((self.H, self.W, 3), (240, 244, 250), np.uint8)
+        self.full = self.bg.copy()
+        self.full[50:130, 60:260] = (20, 60, 160)
+        for no in (1, 2, 3):
+            d = self.tmp / "layers" / f"{no:03d}"
+            d.mkdir(parents=True)
+            Image.fromarray(self.bg).save(d / "bg.png")
+            Image.fromarray(self.full).save(d / "full.png")
+        (self.tmp / "analysis.json").write_text(json.dumps(dict(width=32000, height=18000, slides=[
+            dict(no=n, media=[]) for n in (1, 2, 3)])), encoding="utf-8")
+        self.plan([dict(no=1, hero="a"), dict(no=2, hero="b"), dict(no=3, hero="c")])
+
+    def plan(self, slides):
+        (self.tmp / "plan.json").write_text(json.dumps(dict(slides=slides)), encoding="utf-8")
+
+    def frames(self, direction="left", opening=0.5, move=1.0, hold=2.0, first_full=False, dup_at=None):
+        """Mavi kutu boş arka plandan seçilen yönden kayarak gelir ve yerinde durur."""
+        np = self.np
+        out = []
+        n0, n1, n2 = int(opening * self.FPS), int(move * self.FPS), int(hold * self.FPS)
+        for i in range(n0 + n1 + n2):
+            p = min(1.0, max(0.0, (i - n0 + 1) / n1)) if i >= n0 else 0.0
+            f = self.bg.copy()
+            if p > 0:
+                if direction == "left":
+                    cut = int(60 + 200 * p)
+                    f[50:130, 60:cut] = self.full[50:130, 60:cut]
+                else:
+                    cut = int(130 - 80 * p)
+                    f[cut:130, 60:260] = self.full[cut:130, 60:260]
+            out.append(f)
+        if first_full:
+            out[0] = self.full.copy()
+        if dup_at is not None:
+            out[dup_at] = out[dup_at - 1]
+        return np.stack(out)
+
+    def write(self, no, frames):
+        d = self.tmp / "clips"
+        d.mkdir(exist_ok=True)
+        _clip(d / f"{no:03d}.mp4", frames, self.FPS)
+
+    def check(self):
+        from slideready import qa
+        return qa.run(None, self.tmp)
+
+    def test_good_deck_passes(self):
+        self.write(1, self.frames("left"))
+        self.write(2, self.frames("up"))
+        report, ok = self.check()
+        self.assertTrue(ok, report)
+        self.assertEqual(report["clips"]["clips"][1]["first_filled"], 0.0)
+
+    def test_full_first_frame_fails(self):
+        self.write(1, self.frames("left", first_full=True))
+        report, ok = self.check()
+        self.assertFalse(ok)
+        self.assertTrue(any("ilk kare" in e for e in report["clips"]["clips"][1]["errors"]))
+
+    def test_short_empty_opening_fails(self):
+        self.write(1, self.frames("left", opening=0.1, move=0.1))
+        report, ok = self.check()
+        self.assertTrue(any("boş açılış" in e for e in report["clips"]["clips"][1]["errors"]), report)
+
+    def test_stutter_fails(self):
+        self.write(1, self.frames("left", dup_at=int(1.0 * self.FPS)))
+        report, ok = self.check()
+        self.assertTrue(any("takılan kare" in e for e in report["clips"]["clips"][1]["errors"]), report)
+
+    def test_unfinished_last_frame_fails(self):
+        self.write(1, self.frames("left", hold=0)[:-5])
+        report, ok = self.check()
+        self.assertTrue(any("son kare" in e for e in report["clips"]["clips"][1]["errors"]), report)
+
+    def test_same_motion_twice_in_a_row_fails(self):
+        self.write(1, self.frames("left"))
+        self.write(2, self.frames("left"))
+        report, ok = self.check()
+        self.assertFalse(ok)
+        self.assertTrue(report["sets"]["clips"]["errors"], report)
+
+    def test_repeated_hero_in_plan_fails(self):
+        self.plan([dict(no=1, hero="parçacık"), dict(no=2, hero="perde"), dict(no=3, hero="parçacık")])
+        self.write(1, self.frames("left"))
+        report, ok = self.check()
+        self.assertFalse(ok)
+        self.assertTrue(any("parçacık" in e for e in report["plan"]))
+
+    def test_output_posters_are_empty(self):
+        from pptx import Presentation
+        from slideready.embed import embed
+        deck = self.tmp / "deck.pptx"
+        prs = Presentation()
+        for _ in range(2):
+            prs.slides.add_slide(prs.slide_layouts[6])
+        prs.save(deck)
+        self.write(1, self.frames("left"))
+        self.write(2, self.frames("up", first_full=True))
+        embed(deck, {1: self.tmp / "clips" / "001.mp4", 2: self.tmp / "clips" / "002.mp4"}, self.tmp / "out.pptx")
+        from slideready import qa
+        report, ok = qa.run(deck, self.tmp, self.tmp / "out.pptx")
+        self.assertEqual(len(report["posters"]), 1, report["posters"])
+        self.assertIn("slayt 2", report["posters"][0])
+
+    def test_hero_may_return_after_a_long_gap(self):
+        from slideready import qa
+        heroes = ["a", "b", "c", "d", "e", "f", "a"]
+        errors, warnings = qa.check_plan([dict(no=i + 1, hero=h) for i, h in enumerate(heroes)])
+        self.assertEqual(errors, [])
+        self.assertEqual(len(warnings), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -29,21 +29,18 @@ Değişiklik isterseniz tek cümle yeterli: "3. slayt daha sade olsun", "logoyu 
 
 ## Ajan neye nasıl karar verir
 
-`analyze` her slayda bakar ve `plan.json`'a bir karar yazar (`style: "auto"`); gerekçe `note` alanındadır.
+Ajan iki aşamada karar verir ve başta soru sormaz:
 
-| Slayt | Karar |
-|---|---|
-| İlk slayt, kapak | Başlık parçacıklardan toplanır; veri yoksa en güçlü kamera hareketi, kenardan ışık sızması |
-| Az öğeli bölüm slaytı | Güçlü kamera, parçacıklarla başlık |
-| Sayı ya da grafik yoğun | Sakin kamera; veri önce gelir ve sayar, açıklama sonra |
-| Kartlı / karma düzen | Okuma sırasıyla, derinlikli giriş |
-| Paragraf ağırlıklı | `sakin`: hareket okumanın önüne geçmez |
-| Görsel ağırlıklı, az metin | `enerjik`: canlı giriş, görsel mürekkeple açılır |
-| Kapanış (teşekkür, sorular) | Yavaş, geniş bir geri çekilme |
-| 180 kelimeyi aşan başvuru metni | Sabit kalır |
+1. **Analiz:** `analyze` her slayda bakar ve `plan.json`'a tarz, kamera ve öne çıkan öğe için bir ilk karar yazar
+   (`style: "auto"`, gerekçe `note` alanında). Paragraf ağırlıklı slaytlar `sakin`, görsel ağırlıklılar `enerjik`
+   olur; 180 kelimeyi aşan başvuru metinleri sabit kalır.
+2. **Yönetmen:** ajan bütün sunumu tek film olarak planlar ve her slayta bir kahraman koreografi (`hero`) seçer:
+   parçacıklarla toplanan başlık, yerine oturan dev başlık, renk perdesi, derinlikten uçan kartlar, domino, iki
+   yandan buluşma, halka maske, çizim, mürekkep, sayaç anı, grafik büyümesi, kamera turu, daktilo, odak çekme,
+   geri çekilme. Aynı koreografi sunumda bir kez kullanılır, art arda iki slayt aynı biçimde açılmaz, kamera ve
+   tempo slayttan slayta değişir. Ayrıntılar ve süreler: [references/motion.md](references/motion.md).
 
-Deste tek bir aile içinde kalır (`sakin` ile `enerjik` art arda gelmez) ve slayt başına tek bir "kahraman" efekt
-olur; diğerleri destekleyicidir. Elle seçilen tarz (`sinematik`, `sakin`, `enerjik`) her zaman kazanır.
+Elle seçilen tarz (`sinematik`, `sakin`, `enerjik`) ve elle yazılan notlar her zaman korunur.
 
 ## Efektler
 
@@ -121,6 +118,8 @@ ffmpeg (`winget install Gyan.FFmpeg`).
 - **Claude Code:** repoyu açmanız yeterli (`CLAUDE.md` ve `SKILL.md` otomatik okunur). Her projede kullanmak için
   repoyu `~/.claude/skills/slideready/` olarak klonlayın.
 - **Codex:** repoyu açın; `AGENTS.md` otomatik okunur.
+- Alt ajanlar (`.claude/agents/`): `slideready-director` sunumu tek film olarak planlar ve `plan.json`'a yazar;
+  `slideready-reviewer` her önizleme ve çıktıdan sonra `check` sonucunu ve kareleri denetler.
 
 ## Komut satırı
 
@@ -131,6 +130,7 @@ bin/slideready preview  sunum.pptx --slides 3,7    # belirli slaytlar
 bin/slideready export   sunum.pptx                 # tüm slaytlar, 1080p 60 fps, hareket bulanıklığı → sunum-SlideReady.pptx
 bin/slideready export   sunum.pptx --quality 720   # daha küçük dosya
 bin/slideready export   sunum.pptx --motion-blur 1 # hareket bulanıklığı kapalı: daha hızlı render
+bin/slideready check    sunum.pptx                 # kalite kontrolü: boş ilk kare, kare kaybı, son kare, tekrar, posterler
 ```
 
 `plan.json` slayt başına şu alanları içerir:
@@ -176,6 +176,9 @@ bin/slideready export   sunum.pptx --motion-blur 1 # hareket bulanıklığı kap
   ses tasarımı henüz yok.
 - SmartArt ve gömülü Excel nesneleri tek parça açılır.
 - Otomatik başlatma PowerPoint 2016+ içindir; Google Slides ve Keynote gömülü videoyu otomatik oynatmaz.
+- Koreografi kataloğunun bir kısmı (perde, domino, buluşma, halka, çizim, dev başlık, kamera turu, daktilo, odak)
+  hareket motorunda yazılma aşamasındadır; motor tanımadığı bir koreografiyi yok sayar. `check` aynı biçimde açılan
+  slaytları yine yakalar.
 - Planlananlar: PowerPoint'teki mevcut animasyon sırasını okuma, tıklama başına parça video, PDF girdisi.
 
 ---
